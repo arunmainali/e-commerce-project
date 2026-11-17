@@ -1,0 +1,160 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --color-background: #FFFFFF;
+  --color-surface: #F5F5F5;
+  --color-hairline: #E0E0E0;
+  --color-primary: #111111;
+  --color-secondary: #666666;
+  --color-disabled: #AAAAAA;
+  --color-accent: #E30613;
+  --color-success: #1A7F37;
+}
+
+@layer base {
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
+
+  html {
+    font-family: 'Inter', 'Helvetica Neue', Arial, sans-serif;
+    font-size: 16px;
+    line-height: 1.5;
+    color: var(--color-primary);
+    background-color: var(--color-background);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    min-height: 100vh;
+  }
+
+  /* Focus ring */
+  :focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 2px;
+  }
+
+  /* Remove default focus for mouse users */
+  :focus:not(:focus-visible) {
+    outline: none;
+  }
+
+  a {
+    color: inherit;
+    text-decoration: none;
+  }
+
+  a:hover {
+    text-decoration: underline;
+  }
+
+  button {
+    font-family: inherit;
+    cursor: pointer;
+    border: none;
+    background: none;
+  }
+
+  img {
+    display: block;
+    max-width: 100%;
+  }
+
+  input,
+  select,
+  textarea {
+    font-family: inherit;
+    font-size: inherit;
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply bg-primary text-white px-3 py-1 text-sm font-semibold transition-colors duration-150;
+  }
+  .btn-primary:hover {
+    @apply bg-accent;
+  }
+  .btn-primary:disabled {
+    @apply bg-disabled cursor-not-allowed;
+  }
+
+  .btn-secondary {
+    @apply border border-primary text-primary px-3 py-1 text-sm font-semibold bg-transparent transition-colors duration-150;
+  }
+  .btn-secondary:hover {
+    @apply bg-primary text-white;
+  }
+  .btn-secondary:disabled {
+    @apply border-disabled text-disabled cursor-not-allowed;
+  }
+
+  .input-field {
+    @apply w-full border border-hairline px-2 py-1 text-sm bg-background text-primary transition-colors duration-150;
+  }
+  .input-field:focus {
+    @apply border-primary;
+  }
+  .input-field::placeholder {
+    @apply text-disabled;
+  }
+
+  .chip {
+    @apply inline-flex items-center gap-1 border border-hairline px-1 py-0.5 text-xs text-secondary;
+  }
+
+  .hairline-b {
+    @apply border-b border-hairline;
+  }
+  .hairline-t {
+    @apply border-t border-hairline;
+  }
+  .hairline-r {
+    @apply border-r border-hairline;
+  }
+
+  /* Grid layout */
+  .grid-layout {
+    @apply grid grid-cols-4 gap-grid px-3;
+  }
+
+  @media (min-width: 768px) {
+    .grid-layout {
+      @apply grid-cols-8;
+    }
+  }
+
+  @media (min-width: 1024px) {
+    .grid-layout {
+      @apply grid-cols-12 max-w-[1440px] mx-auto;
+    }
+  }
+
+  /* Skeleton loading */
+  .skeleton {
+    @apply bg-surface animate-pulse;
+  }
+
+  /* Thin custom scrollbar for McMaster style density */
+  .mcmaster-scrollbar::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  .mcmaster-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .mcmaster-scrollbar::-webkit-scrollbar-thumb {
+    background: var(--color-hairline);
+  }
+  .mcmaster-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: var(--color-secondary);
+  }
+}
