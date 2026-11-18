@@ -12,6 +12,7 @@ import { BidHistoryTable } from '../components/BidHistoryTable';
 import { Countdown } from '../components/Countdown';
 import { EmptyState } from '../components/EmptyState';
 import { itemsService } from '../services/itemsService';
+import { useAuthStore } from '../store/authStore';
 import { useCartStore } from '../store/cartStore';
 import { useToastStore } from '../store/toastStore';
 import { formatCurrency } from '../utils/format';
@@ -28,6 +29,8 @@ export const ItemDetailPage: React.FC = () => {
 
   const addItemToCart = useCartStore((state) => state.addItem);
   const addToast = useToastStore((state) => state.addToast);
+  const user = useAuthStore((state) => state.user);
+  const isConsignor = Boolean(user?.id && item?.sellerId && user.id === item.sellerId);
 
   const loadItem = () => {
     if (!id) return;
@@ -178,7 +181,11 @@ export const ItemDetailPage: React.FC = () => {
               </div>
 
               {/* Action Button */}
-              {item.purchaseMode === 'auction' ? (
+              {isConsignor ? (
+                <span className="text-xs font-mono text-secondary px-2.5 py-1 border border-hairline bg-surface whitespace-nowrap">
+                  Your Consigned Lot
+                </span>
+              ) : item.purchaseMode === 'auction' ? (
                 <a href="#bid" className="btn-primary text-xs py-1.5 px-3 whitespace-nowrap">
                   Place Bid
                 </a>
@@ -296,6 +303,15 @@ export const ItemDetailPage: React.FC = () => {
               <div className="border-t sm:border-t-0 sm:border-l border-hairline sm:pl-3 flex flex-col justify-between">
                 {item.purchaseMode === 'auction' ? (
                   <BidForm item={item} onSuccess={loadItem} />
+                ) : isConsignor ? (
+                  <div className="bg-surface/50 p-4 border border-hairline text-left space-y-1.5">
+                    <div className="text-xs font-semibold uppercase tracking-wider text-primary">
+                      Consignor Notice
+                    </div>
+                    <p className="text-xs text-secondary">
+                      You are the registered seller of this listing. Self-purchases are disabled.
+                    </p>
+                  </div>
                 ) : (
                   <div className="space-y-2">
                     <button

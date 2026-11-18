@@ -44,6 +44,29 @@ export const BidForm: React.FC<BidFormProps> = ({ item, onSuccess }) => {
     );
   }
 
+  // Consignor restriction — consignors cannot place bids on their own consigned lots
+  const isConsignor = Boolean(user?.id && item.sellerId && user.id === item.sellerId);
+  if (isConsignor) {
+    return (
+      <div className="bg-surface/50 p-4 border border-hairline text-left space-y-2.5" id="bid">
+        <div className="flex items-center gap-2">
+          <span className="w-2 h-2 rounded-full bg-accent inline-block"></span>
+          <span className="text-xs font-semibold uppercase tracking-wider text-primary">
+            Consignor Notice
+          </span>
+        </div>
+        <p className="text-xs text-secondary leading-relaxed">
+          You are the registered consignor of this lot (Lot #{item.lotNumber}). Platform regulations strictly prohibit consignors from placing bids on their own lots.
+        </p>
+        <div className="pt-1 flex items-center gap-2">
+          <span className="inline-block text-[11px] font-mono px-2 py-0.5 border border-hairline bg-surface text-secondary">
+            Lot #{item.lotNumber} • Consigned by You
+          </span>
+        </div>
+      </div>
+    );
+  }
+
   const handleInitialSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);

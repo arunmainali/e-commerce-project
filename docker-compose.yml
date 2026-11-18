@@ -37,7 +37,7 @@ services:
       DB_USER: "${DB_USER:-postgres}"
       DB_PASSWORD: "${DB_PASSWORD:-parth grey1}"
       JWT_SECRET: "prod-secret-change-in-real-deployment-32-bytes"
-      CORS_ORIGINS: "http://localhost:5173,http://localhost:3000,http://localhost"
+      CORS_ORIGINS: "http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000,http://127.0.0.1:3000,http://localhost,http://127.0.0.1"
       SHIPPING_FLAT_RATE: "500"
       BUYERS_PREMIUM_PCT: "10"
       KHALTI_SECRET_KEY: "${KHALTI_SECRET_KEY:-}"
@@ -58,8 +58,8 @@ services:
     ports:
       - "5173:80"
     environment:
-      VITE_API_BASE_URL: "http://localhost:8080/api/v1"
-      VITE_WS_URL: "ws://localhost:8080/ws"
+      VITE_API_BASE_URL: "/api/v1"
+      VITE_WS_URL: ""
 
 volumes:
   postgres_data:

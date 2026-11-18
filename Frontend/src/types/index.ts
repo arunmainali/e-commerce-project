@@ -42,6 +42,7 @@ export interface ShippingInfo {
 
 export interface Item {
   id: string;
+  sellerId?: string;
   title: string;
   lotNumber: string;
   category: CategorySlug;

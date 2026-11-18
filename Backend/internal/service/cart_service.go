@@ -35,6 +35,10 @@ func (s *CartService) AddItem(ctx context.Context, userID, itemID string, quanti
 		return errors.New("item not found")
 	}
 
+	if item.SellerID != "" && item.SellerID == userID {
+		return errors.New("consignors cannot purchase their own listed items")
+	}
+
 	cartID := "cart-" + uuid.New().String()[:8]
 	return s.cartRepo.AddItem(ctx, cartID, userID, itemID, quantity)
 }

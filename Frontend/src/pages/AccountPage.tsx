@@ -16,19 +16,20 @@ import type { Order, Item } from '../types';
 interface UserBid {
   id: string;
   itemId: string;
-  bidder: string;
+  bidder?: string;
   amount: number;
   status: string;
-  timestamp: string;
-  itemTitle: string;
-  itemLotNumber: string;
-  currentBid: number;
+  timestamp?: string;
+  itemTitle?: string;
+  itemLotNumber?: string;
+  currentBid?: number;
   endTime?: string;
 }
 
 export const AccountPage: React.FC = () => {
   const user = useAuthStore((state) => state.user);
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+  const isHydrated = useAuthStore((state) => state.isHydrated);
   const signOut = useAuthStore((state) => state.signOut);
   const addItemToCart = useCartStore((state) => state.addItem);
   const addToast = useToastStore((state) => state.addToast);
@@ -43,25 +44,27 @@ export const AccountPage: React.FC = () => {
   const [loadingListings, setLoadingListings] = useState(true);
 
   useEffect(() => {
-    if (!isAuthenticated) {
-      navigate('/auth');
-      return;
-    }
+    // If not hydrated yet, wait for Zustand persist
+    if (!isHydrated) return;
+    if (!isAuthenticated) return;
 
     // Load orders
-    ordersService.getOrders().then(setOrders).catch(() => setOrders([]));
+    ordersService
+      .getOrders()
+      .then((res) => setOrders(Array.isArray(res) ? res : []))
+      .catch(() => setOrders([]));
 
     // Load user's active bids from real API
     setLoadingBids(true);
     apiFetch<UserBid[]>('/account/bids')
-      .then((bids) => setUserBids(bids))
+      .then((bids) => setUserBids(Array.isArray(bids) ? bids : []))
       .catch(() => setUserBids([]))
       .finally(() => setLoadingBids(false));
 
     // Load won items from real API
     setLoadingWon(true);
     apiFetch<Item[]>('/account/won')
-      .then((items) => setWonItems(items))
+      .then((items) => setWonItems(Array.isArray(items) ? items : []))
       .catch(() => setWonItems([]))
       .finally(() => setLoadingWon(false));
 
@@ -69,21 +72,28 @@ export const AccountPage: React.FC = () => {
     setLoadingListings(true);
     itemsService
       .getMyListings()
-      .then((items) => setMyListings(items))
+      .then((items) => setMyListings(Array.isArray(items) ? items : []))
       .catch(() => setMyListings([]))
       .finally(() => setLoadingListings(false));
-  }, [isAuthenticated, navigate]);
+  }, [isAuthenticated, isHydrated]);
+
+  // Safe array guards
+  const safeBids = Array.isArray(userBids) ? userBids : [];
+  const safeWon = Array.isArray(wonItems) ? wonItems : [];
+  const safeListings = Array.isArray(myListings) ? myListings : [];
+  const safeOrders = Array.isArray(orders) ? orders : [];
 
   // Compute active bids: only bids on items that haven't ended yet
-  const activeBids = userBids.filter((b) => {
-    if (b.status !== 'active') return false;
+  const activeBids = safeBids.filter((b) => {
+    if (!b || b.status !== 'active') return false;
     if (b.endTime && new Date(b.endTime).getTime() < Date.now()) return false;
     return true;
   });
 
   // Highest bid per item (deduplicate)
   const highestBidByItem = activeBids.reduce<Record<string, UserBid>>((acc, bid) => {
-    if (!acc[bid.itemId] || bid.amount > acc[bid.itemId].amount) {
+    if (!bid || !bid.itemId) return acc;
+    if (!acc[bid.itemId] || (bid.amount ?? 0) > (acc[bid.itemId].amount ?? 0)) {
       acc[bid.itemId] = bid;
     }
     return acc;
@@ -91,13 +101,57 @@ export const AccountPage: React.FC = () => {
   const uniqueActiveBids = Object.values(highestBidByItem);
 
   const handleClaimWonItem = (item: Item) => {
+    if (!item) return;
     addItemToCart(item.id, 1);
     addToast(`Added won lot "${item.title}" to cart for settlement`, 'success');
     navigate('/cart');
   };
 
-  if (!isAuthenticated) return null;
+  // State 1: Hydrating
+  if (!isHydrated) {
+    return (
+      <div className="min-h-screen flex flex-col bg-background text-primary">
+        <Header />
+        <main className="flex-1 max-w-[1440px] w-full mx-auto px-3 py-12 text-left">
+          <div className="p-8 border border-hairline bg-surface/20 text-xs text-secondary font-mono animate-pulse">
+            Loading collector account session…
+          </div>
+        </main>
+        <Footer />
+      </div>
+    );
+  }
 
+  // State 2: Unauthenticated - Professional prompt instead of blank page
+  if (!isAuthenticated) {
+    return (
+      <div className="min-h-screen flex flex-col bg-background text-primary">
+        <Header />
+        <main className="flex-1 max-w-[1440px] w-full mx-auto px-3 py-12 text-left flex justify-center items-center">
+          <div className="w-full max-w-md border border-hairline p-6 bg-surface/30 text-left space-y-4">
+            <div className="border-b border-hairline pb-3">
+              <h1 className="text-sm font-semibold uppercase tracking-wider text-primary">Authentication Required</h1>
+              <p className="text-xs text-secondary mt-1">
+                You must be signed in to access your collector account, active bids, won auction settlements, and consignment listings.
+              </p>
+            </div>
+            <div className="flex items-center gap-3 pt-2">
+              <Link to="/auth" className="btn-primary text-xs py-2 px-4 font-semibold">
+                Sign In / Register →
+              </Link>
+              <Link to="/items" className="btn-secondary text-xs py-2 px-4">
+                Browse Public Lots
+              </Link>
+            </div>
+          </div>
+        </main>
+        <Footer />
+        <Toast />
+      </div>
+    );
+  }
+
+  // State 3: Authenticated view
   return (
     <div className="min-h-screen flex flex-col bg-background text-primary">
       <Header />
@@ -106,9 +160,9 @@ export const AccountPage: React.FC = () => {
         {/* User Profile Bar */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between hairline-b pb-4 mb-6 gap-2">
           <div>
-            <h1 className="text-lg font-semibold text-primary">{user?.name}</h1>
+            <h1 className="text-lg font-semibold text-primary">{user?.name || 'Collector Account'}</h1>
             <p className="text-xs text-secondary font-mono">
-              Account: {user?.id} • Verified Collector ({user?.email})
+              Account: {user?.id || 'usr-active'} • Verified Member ({user?.email || 'authenticated'})
             </p>
           </div>
           <div className="flex items-center gap-2 self-start sm:self-auto">
@@ -132,7 +186,7 @@ export const AccountPage: React.FC = () => {
           </div>
         </div>
 
-        {/* 3 Main Sections */}
+        {/* 4 Main Sections */}
         <div className="space-y-8">
           {/* SECTION 1: ACTIVE BIDS */}
           <section>
@@ -171,7 +225,8 @@ export const AccountPage: React.FC = () => {
                   </thead>
                   <tbody className="divide-y divide-hairline">
                     {uniqueActiveBids.map((bid) => {
-                      const isHighest = bid.amount >= bid.currentBid;
+                      const currentBidVal = bid.currentBid ?? bid.amount ?? 0;
+                      const isHighest = (bid.amount ?? 0) >= currentBidVal;
                       return (
                         <tr key={bid.id} className="hover:bg-surface/30">
                           <td className="py-2 px-3 font-mono text-xs">{bid.itemLotNumber || bid.itemId}</td>
@@ -183,11 +238,11 @@ export const AccountPage: React.FC = () => {
                               {bid.itemTitle || bid.itemId}
                             </Link>
                             <span className="text-xs text-secondary">
-                              Current: {formatCurrency(bid.currentBid)}
+                              Current: {formatCurrency(currentBidVal)}
                             </span>
                           </td>
                           <td className="py-2 px-3 font-mono font-semibold">
-                            {formatCurrency(bid.amount)}
+                            {formatCurrency(bid.amount ?? 0)}
                           </td>
                           <td className="py-2 px-3">
                             {isHighest ? (
@@ -224,7 +279,7 @@ export const AccountPage: React.FC = () => {
           <section>
             <div className="flex items-center justify-between hairline-b pb-2 mb-3">
               <h2 className="text-xs font-semibold uppercase tracking-wider text-secondary">
-                2. Won Auction Lots Awaiting Payment ({loadingWon ? '…' : wonItems.length})
+                2. Won Auction Lots Awaiting Payment ({loadingWon ? '…' : safeWon.length})
               </h2>
               <span className="text-xs text-secondary">Ready for invoice settlement</span>
             </div>
@@ -233,20 +288,20 @@ export const AccountPage: React.FC = () => {
               <div className="p-4 border border-hairline text-xs text-secondary bg-surface/20 animate-pulse">
                 Loading won items…
               </div>
-            ) : wonItems.length === 0 ? (
+            ) : safeWon.length === 0 ? (
               <div className="p-4 border border-hairline text-xs text-secondary bg-surface/20">
                 No won lots awaiting settlement yet.
               </div>
             ) : (
               <div className="border border-hairline divide-y divide-hairline">
-                {wonItems.map((item) => (
+                {safeWon.map((item) => (
                   <div
                     key={item.id}
                     className="p-3 bg-surface/20 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3"
                   >
                     <div className="flex items-center gap-3">
                       <img
-                        src={item.images[0]}
+                        src={(item.images && item.images[0]) || '/placeholder.svg'}
                         alt={item.title}
                         className="w-12 h-12 object-contain p-0.5 border border-hairline bg-surface flex-shrink-0"
                       />
@@ -281,29 +336,29 @@ export const AccountPage: React.FC = () => {
           <section>
             <div className="flex items-center justify-between hairline-b pb-2 mb-3">
               <h2 className="text-xs font-semibold uppercase tracking-wider text-secondary">
-                3. Historical Orders &amp; Paid Invoices ({orders.length})
+                3. Historical Orders &amp; Paid Invoices ({safeOrders.length})
               </h2>
             </div>
 
-            {orders.length === 0 ? (
+            {safeOrders.length === 0 ? (
               <div className="p-4 border border-hairline text-xs text-secondary bg-surface/20">
                 No completed invoices in your purchase record yet.
               </div>
             ) : (
               <div className="border border-hairline divide-y divide-hairline">
-                {orders.map((ord) => (
+                {safeOrders.map((ord) => (
                   <div key={ord.id} className="p-3 flex items-center justify-between text-xs">
                     <div>
                       <span className="font-semibold font-mono text-primary mr-3">{ord.id}</span>
                       <span className="text-secondary">
-                        {new Date(ord.createdAt).toLocaleDateString()}
+                        {ord.createdAt ? new Date(ord.createdAt).toLocaleDateString() : 'N/A'}
                       </span>
                       <span className="text-secondary ml-2">
-                        • {ord.items.length} line items
+                        • {ord.items ? ord.items.length : 0} line items
                       </span>
                     </div>
                     <div className="flex items-center gap-3">
-                      <span className="font-mono font-semibold">{formatCurrency(ord.total)}</span>
+                      <span className="font-mono font-semibold">{formatCurrency(ord.total ?? 0)}</span>
                       <Link to={`/order/${ord.id}`} className="hover:underline text-primary">
                         View Receipt
                       </Link>
@@ -319,7 +374,7 @@ export const AccountPage: React.FC = () => {
             <div className="flex items-center justify-between hairline-b pb-2 mb-3">
               <div className="flex items-center gap-2">
                 <h2 className="text-xs font-semibold uppercase tracking-wider text-secondary">
-                  4. My Consigned / Listed Lots ({loadingListings ? '…' : myListings.length})
+                  4. My Consigned / Listed Lots ({loadingListings ? '…' : safeListings.length})
                 </h2>
                 <span className="text-xs text-secondary font-mono">Active on public catalog</span>
               </div>
@@ -335,7 +390,7 @@ export const AccountPage: React.FC = () => {
               <div className="p-4 border border-hairline text-xs text-secondary bg-surface/20 animate-pulse">
                 Loading your listings…
               </div>
-            ) : myListings.length === 0 ? (
+            ) : safeListings.length === 0 ? (
               <div className="p-6 border border-hairline text-center bg-surface/20 space-y-2">
                 <p className="text-xs text-secondary">You have not listed any lots for auction or sale yet.</p>
                 <Link to="/sell" className="btn-primary text-xs py-1.5 px-4 inline-block">
@@ -344,16 +399,14 @@ export const AccountPage: React.FC = () => {
               </div>
             ) : (
               <div className="border border-hairline divide-y divide-hairline">
-                {myListings.map((it) => (
+                {safeListings.map((it) => (
                   <div key={it.id} className="p-3 flex items-center justify-between text-xs hover:bg-surface/30 gap-4">
                     <div className="flex items-center gap-3 min-w-0">
-                      {it.images && it.images.length > 0 && (
-                        <img
-                          src={it.images[0]}
-                          alt={it.title}
-                          className="w-10 h-10 object-contain p-0.5 border border-hairline bg-surface flex-shrink-0"
-                        />
-                      )}
+                      <img
+                        src={(it.images && it.images[0]) || '/placeholder.svg'}
+                        alt={it.title}
+                        className="w-10 h-10 object-contain p-0.5 border border-hairline bg-surface flex-shrink-0"
+                      />
                       <div className="min-w-0">
                         <span className="font-mono text-secondary mr-2">#{it.lotNumber}</span>
                         <Link to={`/items/${it.id}`} className="font-semibold text-primary hover:underline">

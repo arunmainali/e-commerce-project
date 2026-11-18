@@ -7,7 +7,14 @@ class WebSocketClient {
   private reconnectTimer: any = null;
 
   constructor() {
-    this.url = import.meta.env.VITE_WS_URL || 'ws://localhost:8080/ws';
+    if (import.meta.env.VITE_WS_URL) {
+      this.url = import.meta.env.VITE_WS_URL;
+    } else if (typeof window !== 'undefined' && window.location) {
+      const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      this.url = `${proto}//${window.location.host}/ws`;
+    } else {
+      this.url = 'ws://localhost:8080/ws';
+    }
   }
 
   public connect(): void {

@@ -62,7 +62,7 @@ export const Header: React.FC = () => {
             to="/account"
             className="text-primary hover:text-primary hover:underline"
           >
-            {isAuthenticated && user ? user.name.split(' ')[0] : 'Account'}
+            {isAuthenticated && user?.name ? user.name.split(' ')[0] : 'Account'}
           </Link>
 
           <Link

@@ -92,7 +92,7 @@ type Item struct {
 	MinimumIncrement *int64       `json:"minimumIncrement,omitempty"`
 	BidCount         *int         `json:"bidCount,omitempty"`
 	EndTime          *time.Time   `json:"endTime,omitempty"`
-	SellerID         string       `json:"-"`
+	SellerID         string       `json:"sellerId,omitempty"`
 	SellerInfo       Seller            `json:"seller"`
 	Shipping         ShippingInfo      `json:"shipping"`
 	CreatedAt        time.Time         `json:"createdAt"`

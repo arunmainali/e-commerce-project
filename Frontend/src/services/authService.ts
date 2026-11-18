@@ -20,7 +20,8 @@ export const authService = {
       }
       return { success: true, user: resp.user, accessToken: resp.accessToken };
     } catch (err: any) {
-      if (err.message && !err.message.includes('failed to fetch') && !err.message.includes('NetworkError')) {
+      const msg = (err?.message || '').toLowerCase();
+      if (msg && !msg.includes('failed to fetch') && !msg.includes('networkerror')) {
         return { success: false, message: err.message };
       }
 
@@ -43,7 +44,8 @@ export const authService = {
       }
       return { success: true, user: resp.user, accessToken: resp.accessToken };
     } catch (err: any) {
-      if (err.message && !err.message.includes('failed to fetch') && !err.message.includes('NetworkError')) {
+      const msg = (err?.message || '').toLowerCase();
+      if (msg && !msg.includes('failed to fetch') && !msg.includes('networkerror')) {
         return { success: false, message: err.message };
       }
 

@@ -53,6 +53,11 @@ func (s *BidService) PlaceBid(ctx context.Context, userID, itemID string, amount
 		return nil, errors.New("this auction has ended")
 	}
 
+	// Consignor restriction: A consignor cannot place bids on their own lot
+	if item.SellerID != "" && item.SellerID == userID {
+		return nil, errors.New("consignors are not permitted to place bids on their own lots")
+	}
+
 	// Calculate minimum required bid
 	var currentVal int64
 	if item.CurrentBid != nil && *item.CurrentBid > 0 {
