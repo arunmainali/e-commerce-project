@@ -28,7 +28,7 @@ export const CheckoutPage: React.FC = () => {
     firstName: 'Jane',
     lastName: 'Collector',
     email: 'jane@example.com',
-    phone: '+1 (555) 019-2834',
+    phone: '9800000000',
   });
 
   const [shipping, setShipping] = useState<ShippingAddress>({
@@ -47,6 +47,7 @@ export const CheckoutPage: React.FC = () => {
     nameOnCard: 'Jane Collector',
   });
 
+  const [paymentMethod, setPaymentMethod] = useState<'khalti' | 'card'>('khalti');
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   useEffect(() => {
@@ -95,9 +96,11 @@ export const CheckoutPage: React.FC = () => {
     if (!shipping.line1.trim()) errs.line1 = 'Address line 1 is required';
     if (!shipping.city.trim()) errs.city = 'City is required';
     if (!shipping.zip.trim()) errs.zip = 'Postal code is required';
-    if (!payment.cardNumber.trim()) errs.cardNumber = 'Card number is required';
-    if (!payment.expiry.trim()) errs.expiry = 'Expiration date is required';
-    if (!payment.cvv.trim()) errs.cvv = 'CVV is required';
+    if (paymentMethod === 'card') {
+      if (!payment.cardNumber.trim()) errs.cardNumber = 'Card number is required';
+      if (!payment.expiry.trim()) errs.expiry = 'Expiration date is required';
+      if (!payment.cvv.trim()) errs.cvv = 'CVV is required';
+    }
 
     setErrors(errs);
     return Object.keys(errs).length === 0;
@@ -113,15 +116,38 @@ export const CheckoutPage: React.FC = () => {
     setIsSubmitting(true);
     isSubmittingRef.current = true;
     try {
-      const order = await ordersService.placeOrder(cartItems, contact, shipping);
-      clearCart();
-      addToast('Order confirmed successfully!', 'success');
+      const order = await ordersService.placeOrder(cartItems, contact, shipping, paymentMethod);
 
-      if (order.paymentUrl && order.paymentUrl.startsWith('http') && !order.paymentUrl.includes('mock_ready')) {
-        window.location.href = order.paymentUrl;
-        return;
+      // If Khalti payment URL is returned, redirect to Khalti checkout gateway (cart is cleared upon verified payment on callback)
+      if (paymentMethod === 'khalti') {
+        let paymentUrl = order.paymentUrl;
+        let initErrorMsg = '';
+        if (!paymentUrl && order.id) {
+          try {
+            const initRes = await ordersService.initiateKhalti(order.id);
+            if (initRes && initRes.paymentUrl) {
+              paymentUrl = initRes.paymentUrl;
+            }
+          } catch (initErr: any) {
+            console.error('Failed to initiate Khalti payment:', initErr);
+            initErrorMsg = initErr?.message || '';
+          }
+        }
+
+        if (paymentUrl && paymentUrl.startsWith('http')) {
+          addToast('Redirecting to Khalti payment gateway...', 'info');
+          window.location.assign(paymentUrl);
+          return;
+        } else {
+          addToast(initErrorMsg || 'Could not initiate Khalti sandbox session. Please check connection.', 'error');
+          setIsSubmitting(false);
+          isSubmittingRef.current = false;
+          return;
+        }
       }
 
+      clearCart();
+      addToast('Order confirmed successfully!', 'success');
       navigate(`/order/${order.id}`, { state: { order }, replace: true });
     } catch (err: unknown) {
       isSubmittingRef.current = false;
@@ -324,70 +350,134 @@ export const CheckoutPage: React.FC = () => {
                   </h2>
                 </div>
 
-                <div className="p-3 bg-surface border border-hairline space-y-3">
-                  <div>
-                    <label className="block text-xs font-medium text-secondary mb-1">
-                      Name on Card *
-                    </label>
-                    <input
-                      type="text"
-                      className="input-field"
-                      value={payment.nameOnCard}
-                      onChange={(e) => setPayment({ ...payment, nameOnCard: e.target.value })}
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-medium text-secondary mb-1">
-                      Card Number *
-                    </label>
-                    <input
-                      type="text"
-                      className={`input-field ${errors.cardNumber ? 'border-accent' : ''}`}
-                      value={payment.cardNumber}
-                      onChange={(e) => setPayment({ ...payment, cardNumber: e.target.value })}
-                    />
-                    {errors.cardNumber && (
-                      <span className="text-[11px] text-accent mt-0.5 block">
-                        {errors.cardNumber}
+                {/* Payment Option Selector */}
+                <div className="grid grid-cols-2 gap-3 mb-3">
+                  <button
+                    type="button"
+                    onClick={() => setPaymentMethod('khalti')}
+                    className={`p-3 text-left border text-xs transition-colors ${
+                      paymentMethod === 'khalti'
+                        ? 'border-purple-600 bg-purple-950/20 text-primary font-semibold shadow-sm'
+                        : 'border-hairline bg-surface/40 text-secondary hover:border-hairline-light'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-purple-400 font-bold uppercase tracking-wider text-[11px]">
+                        Khalti ePayment
                       </span>
-                    )}
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-xs font-medium text-secondary mb-1">
-                        Expiry (MM/YY) *
-                      </label>
-                      <input
-                        type="text"
-                        placeholder="MM/YY"
-                        className={`input-field ${errors.expiry ? 'border-accent' : ''}`}
-                        value={payment.expiry}
-                        onChange={(e) => setPayment({ ...payment, expiry: e.target.value })}
-                      />
-                      {errors.expiry && (
-                        <span className="text-[11px] text-accent mt-0.5 block">{errors.expiry}</span>
+                      {paymentMethod === 'khalti' && (
+                        <span className="w-2 h-2 rounded-full bg-purple-400"></span>
                       )}
                     </div>
+                    <div className="text-[11px] text-secondary">
+                      Sandbox KPG-2 Gateway
+                    </div>
+                  </button>
 
-                    <div>
-                      <label className="block text-xs font-medium text-secondary mb-1">
-                        Security Code (CVV) *
-                      </label>
-                      <input
-                        type="text"
-                        placeholder="3-4 digits"
-                        className={`input-field ${errors.cvv ? 'border-accent' : ''}`}
-                        value={payment.cvv}
-                        onChange={(e) => setPayment({ ...payment, cvv: e.target.value })}
-                      />
-                      {errors.cvv && (
-                        <span className="text-[11px] text-accent mt-0.5 block">{errors.cvv}</span>
+                  <button
+                    type="button"
+                    onClick={() => setPaymentMethod('card')}
+                    className={`p-3 text-left border text-xs transition-colors ${
+                      paymentMethod === 'card'
+                        ? 'border-primary bg-surface text-primary font-semibold shadow-sm'
+                        : 'border-hairline bg-surface/40 text-secondary hover:border-hairline-light'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="font-bold uppercase tracking-wider text-[11px]">
+                        Credit / Debit Card
+                      </span>
+                      {paymentMethod === 'card' && (
+                        <span className="w-2 h-2 rounded-full bg-primary"></span>
                       )}
                     </div>
-                  </div>
+                    <div className="text-[11px] text-secondary">
+                      Direct Simulated Charge
+                    </div>
+                  </button>
                 </div>
+
+                {paymentMethod === 'khalti' ? (
+                  <div className="p-4 bg-purple-950/10 border border-purple-900/40 space-y-3 text-xs">
+                    <div className="flex items-center gap-2 text-purple-300 font-semibold">
+                      <span className="px-1.5 py-0.5 bg-purple-900/60 rounded text-[10px] font-mono">SANDBOX</span>
+                      Khalti ePayment Gateway Redirection
+                    </div>
+                    <p className="text-secondary leading-relaxed">
+                      You will be redirected to the official Khalti Sandbox payment portal to authorize payment. After confirmation, you will be redirected back to the verified order receipt.
+                    </p>
+                    <div className="p-2.5 bg-background border border-hairline font-mono text-[11px] space-y-1 text-secondary">
+                      <div className="text-primary font-semibold">Sandbox Test Credentials:</div>
+                      <div>Khalti IDs: <span className="text-primary">9800000000</span> to <span className="text-primary">9800000005</span></div>
+                      <div>MPIN: <span className="text-primary">1111</span> | OTP: <span className="text-primary">987654</span></div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="p-3 bg-surface border border-hairline space-y-3">
+                    <div>
+                      <label className="block text-xs font-medium text-secondary mb-1">
+                        Name on Card *
+                      </label>
+                      <input
+                        type="text"
+                        className="input-field"
+                        value={payment.nameOnCard}
+                        onChange={(e) => setPayment({ ...payment, nameOnCard: e.target.value })}
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-medium text-secondary mb-1">
+                        Card Number *
+                      </label>
+                      <input
+                        type="text"
+                        className={`input-field ${errors.cardNumber ? 'border-accent' : ''}`}
+                        value={payment.cardNumber}
+                        onChange={(e) => setPayment({ ...payment, cardNumber: e.target.value })}
+                      />
+                      {errors.cardNumber && (
+                        <span className="text-[11px] text-accent mt-0.5 block">
+                          {errors.cardNumber}
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs font-medium text-secondary mb-1">
+                          Expiry (MM/YY) *
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="MM/YY"
+                          className={`input-field ${errors.expiry ? 'border-accent' : ''}`}
+                          value={payment.expiry}
+                          onChange={(e) => setPayment({ ...payment, expiry: e.target.value })}
+                        />
+                        {errors.expiry && (
+                          <span className="text-[11px] text-accent mt-0.5 block">{errors.expiry}</span>
+                        )}
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-medium text-secondary mb-1">
+                          Security Code (CVV) *
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="3-4 digits"
+                          className={`input-field ${errors.cvv ? 'border-accent' : ''}`}
+                          value={payment.cvv}
+                          onChange={(e) => setPayment({ ...payment, cvv: e.target.value })}
+                        />
+                        {errors.cvv && (
+                          <span className="text-[11px] text-accent mt-0.5 block">{errors.cvv}</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
               </section>
 
               {/* Submit CTA */}
@@ -395,10 +485,16 @@ export const CheckoutPage: React.FC = () => {
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className="btn-primary w-full py-3 text-sm font-semibold tracking-wide"
+                  className={`w-full py-3 text-sm font-semibold tracking-wide transition-colors ${
+                    paymentMethod === 'khalti'
+                      ? 'bg-purple-700 hover:bg-purple-600 text-white shadow'
+                      : 'btn-primary'
+                  }`}
                 >
                   {isSubmitting
                     ? 'Processing Payment...'
+                    : paymentMethod === 'khalti'
+                    ? `Pay via Khalti • ${formatCurrency(total)}`
                     : `Authorize & Place Order • ${formatCurrency(total)}`}
                 </button>
                 <p className="text-[11px] text-secondary mt-2">
@@ -425,7 +521,7 @@ export const CheckoutPage: React.FC = () => {
                       <SafeImage
                         src={item.images[0]}
                         alt={item.title}
-                        className="w-10 h-10 object-contain p-0.5 bg-background border border-hairline flex-shrink-0"
+                        className="w-[40px] h-[40px] object-contain p-0.5 bg-background border border-hairline flex-shrink-0"
                       />
                       <div className="flex-1 min-w-0">
                         <div className="font-semibold text-primary truncate">{item.title}</div>

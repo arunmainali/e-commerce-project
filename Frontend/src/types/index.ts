@@ -112,6 +112,12 @@ export interface Order {
   buyersPremium: number;
   total: number;
   createdAt: string;
+  paymentMethod?: string;
+  paymentStatus?: string;
+  totalAmountPaisa?: number;
+  pidx?: string;
+  transactionId?: string;
+  status?: string;
 }
 
 export interface User {

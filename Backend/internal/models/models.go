@@ -162,18 +162,23 @@ const (
 )
 
 type Order struct {
-	ID              string       `json:"id"`
-	UserID          string       `json:"userId"`
-	Status          OrderStatus  `json:"status"`
-	ContactInfo     ContactInfo  `json:"contact"`
-	ShippingAddress Address      `json:"shippingAddress"`
-	Subtotal        int64        `json:"subtotal"`
-	ShippingCost    int64        `json:"shippingCost"`
-	BuyersPremium   int64        `json:"buyersPremium"`
-	Total           int64        `json:"total"`
-	Items           []OrderItem  `json:"items"`
-	CreatedAt       time.Time    `json:"createdAt"`
-	UpdatedAt       time.Time    `json:"updatedAt"`
+	ID               string       `json:"id"`
+	UserID           string       `json:"userId"`
+	Status           OrderStatus  `json:"status"`
+	ContactInfo      ContactInfo  `json:"contact"`
+	ShippingAddress  Address      `json:"shippingAddress"`
+	Subtotal         int64        `json:"subtotal"`
+	ShippingCost     int64        `json:"shippingCost"`
+	BuyersPremium    int64        `json:"buyersPremium"`
+	Total            int64        `json:"total"`
+	TotalAmountPaisa int64        `json:"totalAmountPaisa"`
+	PaymentMethod    string       `json:"paymentMethod"`
+	PaymentStatus    string       `json:"paymentStatus"`
+	PIDX             string       `json:"pidx,omitempty"`
+	TransactionID    string       `json:"transactionId,omitempty"`
+	Items            []OrderItem  `json:"items"`
+	CreatedAt        time.Time    `json:"createdAt"`
+	UpdatedAt        time.Time    `json:"updatedAt"`
 }
 
 type OrderItem struct {

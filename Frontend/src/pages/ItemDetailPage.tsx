@@ -194,7 +194,7 @@ export const ItemDetailPage: React.FC = () => {
               <SafeImage
                 src={item.images[0]}
                 alt={item.title}
-                className="w-10 h-10 object-contain border border-hairline bg-surface flex-shrink-0"
+                className="w-[40px] h-[40px] object-contain border border-hairline bg-surface flex-shrink-0"
               />
               <div className="min-w-0 text-left">
                 <div className="text-xs font-semibold text-primary truncate max-w-sm sm:max-w-md">

@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
+	"strings"
 	"time"
 
 	"github.com/auction-studio/backend/internal/config"
@@ -46,6 +48,21 @@ func (s *OrderService) CreateOrder(ctx context.Context, userID string, req dto.C
 	if err != nil {
 		return nil, fmt.Errorf("fetch cart items: %w", err)
 	}
+
+	// If DB cart is empty, populate from client-submitted CartItemIDs
+	if len(cartItems) == 0 && len(req.CartItemIDs) > 0 {
+		for _, itemId := range req.CartItemIDs {
+			it, itErr := s.itemRepo.GetByID(ctx, itemId)
+			if itErr == nil && it != nil {
+				cartItems = append(cartItems, dto.CartItemDetailResponse{
+					ID:       "cart-" + it.ID,
+					Quantity: 1,
+					Item:     *it,
+				})
+			}
+		}
+	}
+
 	if len(cartItems) == 0 {
 		return nil, errors.New("cart is empty")
 	}
@@ -85,20 +102,33 @@ func (s *OrderService) CreateOrder(ctx context.Context, userID string, req dto.C
 	buyersPremium := (subtotal * int64(s.cfg.BuyersPremiumPct)) / 100
 	total := subtotal + shippingCost + buyersPremium
 
+	isCard := strings.EqualFold(req.PaymentMethod, "card")
+	paymentMethod := "KHALTI"
+	paymentStatus := "PENDING"
+	orderStatus := models.OrderStatusPending
+	if isCard {
+		paymentMethod = "CARD"
+		paymentStatus = "COMPLETED"
+		orderStatus = models.OrderStatusPaid
+	}
+
 	orderID := fmt.Sprintf("ORD-%d", time.Now().Unix())
 	order := &models.Order{
-		ID:              orderID,
-		UserID:          userID,
-		Status:          models.OrderStatusPending,
-		ContactInfo:     req.Contact,
-		ShippingAddress: req.ShippingAddress,
-		Subtotal:        subtotal,
-		ShippingCost:    shippingCost,
-		BuyersPremium:   buyersPremium,
-		Total:           total,
-		Items:           orderItems,
-		CreatedAt:       time.Now(),
-		UpdatedAt:       time.Now(),
+		ID:               orderID,
+		UserID:           userID,
+		Status:           orderStatus,
+		ContactInfo:      req.Contact,
+		ShippingAddress:  req.ShippingAddress,
+		Subtotal:         subtotal,
+		ShippingCost:     shippingCost,
+		BuyersPremium:    buyersPremium,
+		Total:            total,
+		TotalAmountPaisa: total * 100,
+		PaymentMethod:    paymentMethod,
+		PaymentStatus:    paymentStatus,
+		Items:            orderItems,
+		CreatedAt:        time.Now(),
+		UpdatedAt:        time.Now(),
 	}
 
 	tx, err := s.orderRepo.BeginTx(ctx)
@@ -115,23 +145,34 @@ func (s *OrderService) CreateOrder(ctx context.Context, userID string, req dto.C
 		return nil, fmt.Errorf("commit order: %w", err)
 	}
 
-	// Mark purchased items as sold so they no longer appear in available listings
-	for _, ci := range cartItems {
-		_ = s.itemRepo.UpdateStatus(ctx, ci.Item.ID, "sold")
+	if isCard {
+		// Immediate fulfillment for direct card orders
+		for _, ci := range cartItems {
+			_ = s.itemRepo.UpdateStatus(ctx, ci.Item.ID, "sold")
+		}
+		_ = s.cartRepo.ClearCart(ctx, userID)
+		return &dto.OrderResponse{
+			Order: *order,
+		}, nil
 	}
 
-	// Clear the user's cart
-	_ = s.cartRepo.ClearCart(ctx, userID)
-
 	// Initiate Khalti payment
+	frontendURL := "http://localhost:5173"
+	if req.ReturnOrigin != "" {
+		frontendURL = strings.TrimRight(req.ReturnOrigin, "/")
+	} else if s.cfg != nil && s.cfg.FrontendURL != "" {
+		frontendURL = strings.TrimRight(s.cfg.FrontendURL, "/")
+	}
+	returnURL := fmt.Sprintf("%s/payment/khalti/callback", frontendURL)
+
 	initReq := payment.InitiateRequest{
-		ReturnURL:         "http://localhost:5173/order/" + orderID,
-		WebsiteURL:        "http://localhost:5173",
+		ReturnURL:         returnURL,
+		WebsiteURL:        frontendURL,
 		Amount:            total * 100, // NPR to Paisa
 		PurchaseOrderID:   orderID,
 		PurchaseOrderName: fmt.Sprintf("Auction Studio Order %s", orderID),
 		CustomerInfo: payment.CustomerInfo{
-			Name:  fmt.Sprintf("%s %s", req.Contact.FirstName, req.Contact.LastName),
+			Name:  fmt.Sprintf("%s %s", strings.TrimSpace(req.Contact.FirstName), strings.TrimSpace(req.Contact.LastName)),
 			Email: req.Contact.Email,
 			Phone: req.Contact.Phone,
 		},
@@ -139,20 +180,25 @@ func (s *OrderService) CreateOrder(ctx context.Context, userID string, req dto.C
 
 	initResp, err := s.paymentProv.Initiate(ctx, initReq)
 	var paymentInfo *dto.PaymentInfo
-	if err == nil && initResp != nil {
+	if err != nil {
+		log.Printf("[OrderService] Khalti initiate error for order %s: %v", orderID, err)
+	} else if initResp != nil {
 		paymentInfo = &dto.PaymentInfo{
 			PaymentURL: initResp.PaymentURL,
 			PIDX:       initResp.PIDX,
 		}
 
+		order.PIDX = initResp.PIDX
+		_ = s.orderRepo.UpdatePaymentInfo(ctx, orderID, initResp.PIDX, order.TotalAmountPaisa, "KHALTI", "PENDING")
+
 		// Record initiated payment
 		_ = s.paymentRepo.Create(ctx, &models.Payment{
-			ID:            "pay-" + uuid.New().String()[:8],
-			OrderID:       orderID,
-			Provider:      s.paymentProv.Name(),
-			PIDX:          initResp.PIDX,
-			Amount:        total,
-			Status:        models.PaymentStatusInitiated,
+			ID:       "pay-" + uuid.New().String()[:8],
+			OrderID:  orderID,
+			Provider: s.paymentProv.Name(),
+			PIDX:     initResp.PIDX,
+			Amount:   total,
+			Status:   models.PaymentStatusInitiated,
 		})
 	}
 

@@ -128,6 +128,8 @@ type CreateOrderRequest struct {
 	Contact         models.ContactInfo `json:"contact"`
 	ShippingAddress models.Address     `json:"shippingAddress"`
 	CartItemIDs     []string           `json:"cartItemIds,omitempty"` // If omitted, uses current user's whole cart
+	ReturnOrigin    string             `json:"returnOrigin,omitempty"`
+	PaymentMethod   string             `json:"paymentMethod,omitempty"`
 }
 
 type OrderResponse struct {
@@ -143,7 +145,16 @@ type PaymentInfo struct {
 // ── Payment DTOs ──────────────────────────────────
 
 type PaymentInitiateRequest struct {
-	OrderID string `json:"orderId"`
+	OrderID      string `json:"orderId"`
+	OrderIDAlt   string `json:"order_id"`
+	ReturnOrigin string `json:"returnOrigin,omitempty"`
+}
+
+func (r *PaymentInitiateRequest) GetOrderID() string {
+	if r.OrderID != "" {
+		return r.OrderID
+	}
+	return r.OrderIDAlt
 }
 
 type PaymentInitiateResponse struct {
@@ -160,5 +171,6 @@ type PaymentVerifyResponse struct {
 	Status        string `json:"status"`
 	TransactionID string `json:"transactionId"`
 	Amount        int64  `json:"amount"`
+	OrderID       string `json:"orderId,omitempty"`
 	Message       string `json:"message"`
 }

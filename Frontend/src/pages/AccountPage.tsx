@@ -304,7 +304,7 @@ export const AccountPage: React.FC = () => {
                       <SafeImage
                         src={(item.images && item.images[0]) || '/placeholder.svg'}
                         alt={item.title}
-                        className="w-12 h-12 object-contain p-0.5 border border-hairline bg-surface flex-shrink-0"
+                        className="w-[48px] h-[48px] object-contain p-0.5 border border-hairline bg-surface flex-shrink-0"
                       />
                       <div>
                         <div className="text-xs font-mono text-secondary">LOT #{item.lotNumber} [WINNER]</div>
@@ -347,25 +347,41 @@ export const AccountPage: React.FC = () => {
               </div>
             ) : (
               <div className="border border-hairline divide-y divide-hairline">
-                {safeOrders.map((ord) => (
-                  <div key={ord.id} className="p-3 flex items-center justify-between text-xs">
-                    <div>
-                      <span className="font-semibold font-mono text-primary mr-3">{ord.id}</span>
-                      <span className="text-secondary">
-                        {ord.createdAt ? new Date(ord.createdAt).toLocaleDateString() : 'N/A'}
-                      </span>
-                      <span className="text-secondary ml-2">
-                        • {ord.items ? ord.items.length : 0} line items
-                      </span>
+                {safeOrders.map((ord) => {
+                  const isPaid = ord.status === 'paid' || ord.paymentStatus === 'COMPLETED';
+                  return (
+                    <div key={ord.id} className="p-3 flex items-center justify-between text-xs hover:bg-surface/20">
+                      <div>
+                        <div className="flex items-center gap-2 mb-0.5">
+                          <span className="font-semibold font-mono text-primary">{ord.id}</span>
+                          {isPaid ? (
+                            <span className="px-1.5 py-0.5 bg-green-950 text-green-400 border border-green-800 text-[10px] font-mono font-semibold uppercase">
+                              PAID {ord.paymentMethod ? `(${ord.paymentMethod})` : ''}
+                            </span>
+                          ) : (
+                            <span className="px-1.5 py-0.5 bg-amber-950 text-amber-400 border border-amber-800 text-[10px] font-mono uppercase">
+                              {ord.paymentStatus || ord.status || 'PENDING'}
+                            </span>
+                          )}
+                          {ord.transactionId && (
+                            <span className="text-[10px] text-secondary font-mono">
+                              Txn: {ord.transactionId}
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-secondary text-[11px]">
+                          {ord.createdAt ? new Date(ord.createdAt).toLocaleDateString() : 'N/A'} • {ord.items ? ord.items.length : 0} line items
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <span className="font-mono font-semibold text-primary">{formatCurrency(ord.total ?? 0)}</span>
+                        <Link to={`/order/${ord.id}`} className="btn-secondary text-xs py-1 px-2.5">
+                          View Receipt
+                        </Link>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-3">
-                      <span className="font-mono font-semibold">{formatCurrency(ord.total ?? 0)}</span>
-                      <Link to={`/order/${ord.id}`} className="hover:underline text-primary">
-                        View Receipt
-                      </Link>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </section>
@@ -406,7 +422,7 @@ export const AccountPage: React.FC = () => {
                       <SafeImage
                         src={(it.images && it.images[0]) || '/placeholder.svg'}
                         alt={it.title}
-                        className="w-10 h-10 object-contain p-0.5 border border-hairline bg-surface flex-shrink-0"
+                        className="w-[40px] h-[40px] object-contain p-0.5 border border-hairline bg-surface flex-shrink-0"
                       />
                       <div className="min-w-0">
                         <span className="font-mono text-secondary mr-2">#{it.lotNumber}</span>

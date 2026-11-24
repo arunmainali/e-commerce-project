@@ -40,9 +40,10 @@ services:
       CORS_ORIGINS: "http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000,http://127.0.0.1:3000,http://localhost,http://127.0.0.1"
       SHIPPING_FLAT_RATE: "500"
       BUYERS_PREMIUM_PCT: "10"
-      KHALTI_SECRET_KEY: "${KHALTI_SECRET_KEY:-}"
-      KHALTI_PUBLIC_KEY: "${KHALTI_PUBLIC_KEY:-}"
-      KHALTI_BASE_URL: "https://a.khalti.com/api/v2"
+      KHALTI_SECRET_KEY: "${KHALTI_SECRET_KEY:-f71c9259c8f6457990893885d591abc7}"
+      KHALTI_PUBLIC_KEY: "${KHALTI_PUBLIC_KEY:-bf89cb854d474508bf73337f6c273d88}"
+      KHALTI_BASE_URL: "${KHALTI_BASE_URL:-https://a.khalti.com/api/v2}"
+      FRONTEND_URL: "${FRONTEND_URL:-http://localhost:5173}"
       UPLOAD_DIR: "/app/uploads"
     volumes:
       - backend_uploads:/app/uploads

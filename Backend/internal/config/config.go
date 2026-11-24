@@ -24,10 +24,11 @@ type Config struct {
 	UploadDir        string
 	MaxUploadSize    int64
 	GA4MeasurementID string
+	FrontendURL      string
 }
 
 func loadDotEnv() {
-	paths := []string{".env", "../.env"}
+	paths := []string{".env", "../.env", "/app/.env", "./Backend/.env"}
 	for _, p := range paths {
 		data, err := os.ReadFile(p)
 		if err != nil {
@@ -125,12 +126,13 @@ func Load() *Config {
 		CORSOrigins:      getEnv("CORS_ORIGINS", "http://localhost:5173"),
 		ShippingFlatRate: getEnvInt64("SHIPPING_FLAT_RATE", 500),
 		BuyersPremiumPct: getEnvInt("BUYERS_PREMIUM_PCT", 10),
-		KhaltiSecretKey:  getEnv("KHALTI_SECRET_KEY", ""),
-		KhaltiPublicKey:  getEnv("KHALTI_PUBLIC_KEY", ""),
+		KhaltiSecretKey:  getEnv("KHALTI_SECRET_KEY", "f71c9259c8f6457990893885d591abc7"),
+		KhaltiPublicKey:  getEnv("KHALTI_PUBLIC_KEY", "bf89cb854d474508bf73337f6c273d88"),
 		KhaltiBaseURL:    getEnv("KHALTI_BASE_URL", "https://a.khalti.com/api/v2"),
 		UploadDir:        getEnv("UPLOAD_DIR", "./uploads"),
 		MaxUploadSize:    getEnvInt64("MAX_UPLOAD_SIZE", 10<<20),
 		GA4MeasurementID: getEnv("GA4_MEASUREMENT_ID", ""),
+		FrontendURL:      getEnv("FRONTEND_URL", "http://localhost:5173"),
 	}
 }
 

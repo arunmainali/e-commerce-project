@@ -12,6 +12,7 @@ export const ordersService = {
     cartItems: CartItem[],
     contact: ContactInfo,
     shippingAddress: ShippingAddress,
+    paymentMethod: 'khalti' | 'card' = 'khalti',
   ): Promise<Order & { paymentUrl?: string; pidx?: string }> {
     try {
       const resp = await apiFetch<{ order: Order; payment?: { paymentUrl?: string; pidx?: string } }>('/orders', {
@@ -20,38 +21,65 @@ export const ordersService = {
           contact,
           shippingAddress,
           cartItemIds: cartItems.map((c) => c.itemId),
+          returnOrigin: window.location.origin,
+          paymentMethod,
         }),
       });
 
       const order = resp.order;
-      if (order.items) {
-        order.items.forEach((it) => {
-          if (it.item?.id) {
-            itemsService.markAsSold(it.item.id);
-          } else if ((it as any).itemId) {
-            itemsService.markAsSold((it as any).itemId);
-          }
-        });
+      if (paymentMethod === 'card') {
+        if (order.items) {
+          order.items.forEach((it) => {
+            if (it.item?.id) {
+              itemsService.markAsSold(it.item.id);
+            } else if ((it as any).itemId) {
+              itemsService.markAsSold((it as any).itemId);
+            }
+          });
+        }
+        cartItems.forEach((ci) => itemsService.markAsSold(ci.itemId));
       }
-      cartItems.forEach((ci) => itemsService.markAsSold(ci.itemId));
 
       trackPurchase(
         order.id,
         order.total,
-        order.items.map((i) => ({
-          id: i.item.id,
-          title: i.item.title,
-          price: i.item.purchaseMode === 'auction' ? (i.item.currentBid ?? 0) : (i.item.price ?? 0),
-          quantity: i.quantity,
+        (order.items || []).map((i: any) => ({
+          id: i.item?.id || i.itemId || '',
+          title: i.item?.title || i.title || 'Catalog Item',
+          price: i.item
+            ? (i.item.purchaseMode === 'auction' ? (i.item.currentBid ?? 0) : (i.item.price ?? 0))
+            : (i.price ?? 0),
+          quantity: i.quantity || 1,
         }))
       );
 
+      let paymentUrl = resp.payment?.paymentUrl;
+      let pidx = resp.payment?.pidx;
+
+      if (paymentMethod === 'khalti' && !paymentUrl && order.id) {
+        const initResp = await ordersService.initiateKhalti(order.id);
+        if (initResp && initResp.paymentUrl) {
+          paymentUrl = initResp.paymentUrl;
+          pidx = initResp.pidx;
+        }
+      }
+
       return {
         ...order,
-        paymentUrl: resp.payment?.paymentUrl,
-        pidx: resp.payment?.pidx,
+        paymentUrl,
+        pidx,
       };
-    } catch {
+    } catch (apiErr: any) {
+      // Only fall back to offline mock mode on actual network disconnect errors, not HTTP 400/401/500 API errors
+      const msg = apiErr instanceof Error ? apiErr.message : String(apiErr);
+      if (
+        !msg.includes('Failed to fetch') &&
+        !msg.includes('NetworkError') &&
+        !msg.includes('Load failed')
+      ) {
+        throw apiErr;
+      }
+      console.warn('Network unreachable, using offline fallback:', apiErr);
       // Offline fallback
       const resolvedItems: { item: Item; quantity: number }[] = [];
       let subtotal = 0;
@@ -143,7 +171,21 @@ export const ordersService = {
     }
   },
 
-  async verifyPayment(pidx: string): Promise<{ status: string; transactionId: string; amount: number; message: string }> {
+  async initiateKhalti(orderId: string): Promise<{ pidx: string; paymentUrl: string; expiresAt: string }> {
+    return await apiFetch('/payments/khalti/initiate', {
+      method: 'POST',
+      body: JSON.stringify({ order_id: orderId, orderId, returnOrigin: window.location.origin }),
+    });
+  },
+
+  async verifyKhalti(pidx: string): Promise<{ status: string; transactionId: string; amount: number; orderId?: string; message: string }> {
+    return await apiFetch('/payments/khalti/verify', {
+      method: 'POST',
+      body: JSON.stringify({ pidx }),
+    });
+  },
+
+  async verifyPayment(pidx: string): Promise<{ status: string; transactionId: string; amount: number; orderId?: string; message: string }> {
     return await apiFetch('/payments/verify', {
       method: 'POST',
       body: JSON.stringify({ pidx }),

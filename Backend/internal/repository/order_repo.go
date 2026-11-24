@@ -23,23 +23,36 @@ func (r *OrderRepository) BeginTx(ctx context.Context) (pgx.Tx, error) {
 }
 
 func (r *OrderRepository) Create(ctx context.Context, tx pgx.Tx, o *models.Order) error {
+	if o.TotalAmountPaisa == 0 {
+		o.TotalAmountPaisa = o.Total * 100
+	}
+	if o.PaymentMethod == "" {
+		o.PaymentMethod = "KHALTI"
+	}
+	if o.PaymentStatus == "" {
+		o.PaymentStatus = "PENDING"
+	}
+
 	orderQuery := `
 		INSERT INTO orders (
 			id, user_id, status, first_name, last_name, email, phone,
 			line1, line2, city, state, zip, country,
 			subtotal, shipping_cost, buyers_premium, total,
+			total_amount_paisa, payment_method, payment_status, pidx, transaction_id,
 			created_at, updated_at
 		) VALUES (
 			$1, $2, $3, $4, $5, $6, $7,
 			$8, $9, $10, $11, $12, $13,
 			$14, $15, $16, $17,
-			$18, $19
+			$18, $19, $20, $21, $22,
+			$23, $24
 		)
 	`
 	_, err := tx.Exec(ctx, orderQuery,
 		o.ID, o.UserID, o.Status, o.ContactInfo.FirstName, o.ContactInfo.LastName, o.ContactInfo.Email, o.ContactInfo.Phone,
 		o.ShippingAddress.Line1, o.ShippingAddress.Line2, o.ShippingAddress.City, o.ShippingAddress.State, o.ShippingAddress.Zip, o.ShippingAddress.Country,
 		o.Subtotal, o.ShippingCost, o.BuyersPremium, o.Total,
+		o.TotalAmountPaisa, o.PaymentMethod, o.PaymentStatus, o.PIDX, o.TransactionID,
 		o.CreatedAt, o.UpdatedAt,
 	)
 	if err != nil {
@@ -68,6 +81,8 @@ func (r *OrderRepository) GetByID(ctx context.Context, id string) (*models.Order
 			id, user_id, status, first_name, last_name, email, phone,
 			line1, line2, city, state, zip, country,
 			subtotal, shipping_cost, buyers_premium, total,
+			COALESCE(total_amount_paisa, 0), COALESCE(payment_method, 'KHALTI'),
+			COALESCE(payment_status, 'PENDING'), COALESCE(pidx, ''), COALESCE(transaction_id, ''),
 			created_at, updated_at
 		FROM orders
 		WHERE id = $1
@@ -77,6 +92,7 @@ func (r *OrderRepository) GetByID(ctx context.Context, id string) (*models.Order
 		&o.ID, &o.UserID, &o.Status, &o.ContactInfo.FirstName, &o.ContactInfo.LastName, &o.ContactInfo.Email, &o.ContactInfo.Phone,
 		&o.ShippingAddress.Line1, &o.ShippingAddress.Line2, &o.ShippingAddress.City, &o.ShippingAddress.State, &o.ShippingAddress.Zip, &o.ShippingAddress.Country,
 		&o.Subtotal, &o.ShippingCost, &o.BuyersPremium, &o.Total,
+		&o.TotalAmountPaisa, &o.PaymentMethod, &o.PaymentStatus, &o.PIDX, &o.TransactionID,
 		&o.CreatedAt, &o.UpdatedAt,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -95,12 +111,49 @@ func (r *OrderRepository) GetByID(ctx context.Context, id string) (*models.Order
 	return &o, nil
 }
 
+func (r *OrderRepository) GetByPIDX(ctx context.Context, pidx string) (*models.Order, error) {
+	query := `
+		SELECT 
+			id, user_id, status, first_name, last_name, email, phone,
+			line1, line2, city, state, zip, country,
+			subtotal, shipping_cost, buyers_premium, total,
+			COALESCE(total_amount_paisa, 0), COALESCE(payment_method, 'KHALTI'),
+			COALESCE(payment_status, 'PENDING'), COALESCE(pidx, ''), COALESCE(transaction_id, ''),
+			created_at, updated_at
+		FROM orders
+		WHERE pidx = $1
+	`
+	var o models.Order
+	err := r.pool.QueryRow(ctx, query, pidx).Scan(
+		&o.ID, &o.UserID, &o.Status, &o.ContactInfo.FirstName, &o.ContactInfo.LastName, &o.ContactInfo.Email, &o.ContactInfo.Phone,
+		&o.ShippingAddress.Line1, &o.ShippingAddress.Line2, &o.ShippingAddress.City, &o.ShippingAddress.State, &o.ShippingAddress.Zip, &o.ShippingAddress.Country,
+		&o.Subtotal, &o.ShippingCost, &o.BuyersPremium, &o.Total,
+		&o.TotalAmountPaisa, &o.PaymentMethod, &o.PaymentStatus, &o.PIDX, &o.TransactionID,
+		&o.CreatedAt, &o.UpdatedAt,
+	)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	items, err := r.getOrderItems(ctx, o.ID)
+	if err == nil {
+		o.Items = items
+	}
+
+	return &o, nil
+}
+
 func (r *OrderRepository) GetByUserID(ctx context.Context, userID string) ([]models.Order, error) {
 	query := `
 		SELECT 
 			id, user_id, status, first_name, last_name, email, phone,
 			line1, line2, city, state, zip, country,
 			subtotal, shipping_cost, buyers_premium, total,
+			COALESCE(total_amount_paisa, 0), COALESCE(payment_method, 'KHALTI'),
+			COALESCE(payment_status, 'PENDING'), COALESCE(pidx, ''), COALESCE(transaction_id, ''),
 			created_at, updated_at
 		FROM orders
 		WHERE user_id = $1
@@ -119,6 +172,7 @@ func (r *OrderRepository) GetByUserID(ctx context.Context, userID string) ([]mod
 			&o.ID, &o.UserID, &o.Status, &o.ContactInfo.FirstName, &o.ContactInfo.LastName, &o.ContactInfo.Email, &o.ContactInfo.Phone,
 			&o.ShippingAddress.Line1, &o.ShippingAddress.Line2, &o.ShippingAddress.City, &o.ShippingAddress.State, &o.ShippingAddress.Zip, &o.ShippingAddress.Country,
 			&o.Subtotal, &o.ShippingCost, &o.BuyersPremium, &o.Total,
+			&o.TotalAmountPaisa, &o.PaymentMethod, &o.PaymentStatus, &o.PIDX, &o.TransactionID,
 			&o.CreatedAt, &o.UpdatedAt,
 		)
 		if err != nil {
@@ -140,6 +194,26 @@ func (r *OrderRepository) GetByUserID(ctx context.Context, userID string) ([]mod
 func (r *OrderRepository) UpdateStatus(ctx context.Context, orderID string, status models.OrderStatus) error {
 	query := `UPDATE orders SET status = $1, updated_at = NOW() WHERE id = $2`
 	_, err := r.pool.Exec(ctx, query, status, orderID)
+	return err
+}
+
+func (r *OrderRepository) UpdatePaymentInfo(ctx context.Context, orderID, pidx string, amountPaisa int64, paymentMethod, paymentStatus string) error {
+	query := `
+		UPDATE orders
+		SET pidx = $1, total_amount_paisa = $2, payment_method = $3, payment_status = $4, updated_at = NOW()
+		WHERE id = $5
+	`
+	_, err := r.pool.Exec(ctx, query, pidx, amountPaisa, paymentMethod, paymentStatus, orderID)
+	return err
+}
+
+func (r *OrderRepository) UpdatePaymentStatus(ctx context.Context, orderID, paymentStatus, orderStatus, transactionID string) error {
+	query := `
+		UPDATE orders
+		SET payment_status = $1, status = $2, transaction_id = $3, updated_at = NOW()
+		WHERE id = $4
+	`
+	_, err := r.pool.Exec(ctx, query, paymentStatus, orderStatus, transactionID, orderID)
 	return err
 }
 

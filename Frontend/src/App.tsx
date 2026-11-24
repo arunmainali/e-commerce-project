@@ -9,6 +9,7 @@ import { OrderConfirmationPage } from './pages/OrderConfirmationPage';
 import { AuthPage } from './pages/AuthPage';
 import { AccountPage } from './pages/AccountPage';
 import { SellPage } from './pages/SellPage';
+import { KhaltiCallbackPage } from './pages/KhaltiCallbackPage';
 
 declare global {
   interface Window {
@@ -45,6 +46,7 @@ export const App: React.FC = () => {
         <Route path="/wishlist" element={<WishlistPage />} />
         <Route path="/cart" element={<CartPage />} />
         <Route path="/checkout" element={<CheckoutPage />} />
+        <Route path="/payment/khalti/callback" element={<KhaltiCallbackPage />} />
         <Route path="/order/:id" element={<OrderConfirmationPage />} />
         <Route path="/auth" element={<AuthPage />} />
         <Route path="/account" element={<AccountPage />} />

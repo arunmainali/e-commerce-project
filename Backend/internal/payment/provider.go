@@ -6,7 +6,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
+	"strings"
+	"sync"
 	"time"
 )
 
@@ -57,11 +60,14 @@ func NewKhaltiProvider(secretKey, publicKey, baseURL string) *KhaltiProvider {
 	if baseURL == "" {
 		baseURL = "https://a.khalti.com/api/v2"
 	}
+	// Trim trailing slash to prevent double slash in URLs
+	baseURL = strings.TrimRight(baseURL, "/")
+
 	return &KhaltiProvider{
 		SecretKey: secretKey,
 		PublicKey: publicKey,
 		BaseURL:   baseURL,
-		client:    &http.Client{Timeout: 15 * time.Second},
+		client:    &http.Client{Timeout: 30 * time.Second},
 	}
 }
 
@@ -69,13 +75,41 @@ func (k *KhaltiProvider) Name() string {
 	return "khalti"
 }
 
+var (
+	mockMu      sync.RWMutex
+	mockAmounts = make(map[string]int64)
+)
+
+func sanitizePhone(phone string) string {
+	cleaned := strings.NewReplacer(" ", "", "-", "", "(", "", ")", "", ".", "").Replace(strings.TrimSpace(phone))
+	if len(cleaned) > 15 {
+		cleaned = cleaned[len(cleaned)-10:]
+	}
+	if len(cleaned) < 7 {
+		return "9800000000"
+	}
+	return cleaned
+}
+
 func (k *KhaltiProvider) Initiate(ctx context.Context, req InitiateRequest) (*InitiateResponse, error) {
+	// Sanitize customer info to strictly satisfy Khalti KPG-2 validation rules
+	req.CustomerInfo.Phone = sanitizePhone(req.CustomerInfo.Phone)
+	if strings.TrimSpace(req.CustomerInfo.Name) == "" {
+		req.CustomerInfo.Name = "Auction Collector"
+	}
+	if strings.TrimSpace(req.CustomerInfo.Email) == "" {
+		req.CustomerInfo.Email = "collector@auctionstudio.com"
+	}
+
 	// If no secret key is provided (e.g. dev/test mode), simulate a successful initiation
 	if k.SecretKey == "" || k.SecretKey == "change-me" {
 		pidx := fmt.Sprintf("mock-pidx-%d", time.Now().UnixNano())
+		mockMu.Lock()
+		mockAmounts[pidx] = req.Amount
+		mockMu.Unlock()
 		return &InitiateResponse{
 			PIDX:       pidx,
-			PaymentURL: fmt.Sprintf("%s?pidx=%s&status=mock_ready", req.ReturnURL, pidx),
+			PaymentURL: fmt.Sprintf("%s?pidx=%s&status=Completed&amount=%d&purchase_order_id=%s", req.ReturnURL, pidx, req.Amount, req.PurchaseOrderID),
 			ExpiresAt:  time.Now().Add(1 * time.Hour).Format(time.RFC3339),
 		}, nil
 	}
@@ -96,6 +130,7 @@ func (k *KhaltiProvider) Initiate(ctx context.Context, req InitiateRequest) (*In
 
 	resp, err := k.client.Do(httpReq)
 	if err != nil {
+		log.Printf("[Khalti Initiate] HTTP error: %v", err)
 		return nil, fmt.Errorf("http call: %w", err)
 	}
 	defer resp.Body.Close()
@@ -106,6 +141,7 @@ func (k *KhaltiProvider) Initiate(ctx context.Context, req InitiateRequest) (*In
 	}
 
 	if resp.StatusCode != http.StatusOK {
+		log.Printf("[Khalti Initiate] API Error (%d): %s | Payload: %s", resp.StatusCode, string(respBody), string(body))
 		return nil, fmt.Errorf("khalti api error (%d): %s", resp.StatusCode, string(respBody))
 	}
 
@@ -120,11 +156,17 @@ func (k *KhaltiProvider) Initiate(ctx context.Context, req InitiateRequest) (*In
 func (k *KhaltiProvider) Verify(ctx context.Context, pidx string) (*VerifyResponse, error) {
 	// If mock/sandbox without key
 	if k.SecretKey == "" || k.SecretKey == "change-me" {
+		mockMu.RLock()
+		amt, exists := mockAmounts[pidx]
+		mockMu.RUnlock()
+		if !exists {
+			amt = 1000
+		}
 		return &VerifyResponse{
 			PIDX:          pidx,
 			Status:        "Completed",
 			TransactionID: fmt.Sprintf("MOCK-TXN-%d", time.Now().Unix()),
-			TotalAmount:   1000,
+			TotalAmount:   amt,
 			Refunded:      false,
 		}, nil
 	}
