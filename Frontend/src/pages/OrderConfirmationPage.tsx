@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, useSearchParams, Link } from 'react-router-dom';
+import { useParams, useSearchParams, useLocation, Link } from 'react-router-dom';
 import { Header } from '../components/Header';
 import { Footer } from '../components/Footer';
+import { SafeImage } from '../components/SafeImage';
 import { ordersService } from '../services/ordersService';
 import { formatCurrency } from '../utils/format';
 import type { Order } from '../types';
@@ -9,8 +10,10 @@ import type { Order } from '../types';
 export const OrderConfirmationPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const [searchParams] = useSearchParams();
-  const [order, setOrder] = useState<Order | null>(null);
-  const [loading, setLoading] = useState(true);
+  const location = useLocation();
+  const initialOrder = (location.state as { order?: Order } | null)?.order ?? null;
+  const [order, setOrder] = useState<Order | null>(initialOrder);
+  const [loading, setLoading] = useState<boolean>(!initialOrder);
   const [paymentStatus, setPaymentStatus] = useState<string | null>(null);
 
   useEffect(() => {
@@ -26,7 +29,11 @@ export const OrderConfirmationPage: React.FC = () => {
     }
 
     ordersService.getOrderById(id).then((ord) => {
-      setOrder(ord);
+      if (ord) {
+        setOrder(ord);
+      }
+      setLoading(false);
+    }).catch(() => {
       setLoading(false);
     });
   }, [id, searchParams]);
@@ -99,7 +106,7 @@ export const OrderConfirmationPage: React.FC = () => {
                 return (
                   <div key={item.id} className="p-3 flex items-start justify-between gap-3 bg-background">
                     <div className="flex items-start gap-3">
-                      <img
+                      <SafeImage
                         src={item.images[0]}
                         alt={item.title}
                         className="w-12 h-12 object-contain border border-hairline bg-surface flex-shrink-0 p-0.5"

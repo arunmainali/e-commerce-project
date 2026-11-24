@@ -136,6 +136,28 @@ func (h *ItemHandler) Create(w http.ResponseWriter, r *http.Request) {
 	JSON(w, http.StatusCreated, item)
 }
 
+func (h *ItemHandler) StopAuction(w http.ResponseWriter, r *http.Request) {
+	sellerID := middleware.GetUserID(r.Context())
+	if sellerID == "" {
+		ErrorJSON(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	itemID := chi.URLParam(r, "id")
+	if itemID == "" {
+		ErrorJSON(w, http.StatusBadRequest, "item id is required")
+		return
+	}
+
+	item, err := h.itemService.StopAuction(r.Context(), sellerID, itemID)
+	if err != nil {
+		ErrorJSON(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	JSON(w, http.StatusOK, item)
+}
+
 func (h *ItemHandler) GetMyListings(w http.ResponseWriter, r *http.Request) {
 	sellerID := middleware.GetUserID(r.Context())
 	if sellerID == "" {

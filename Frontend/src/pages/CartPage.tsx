@@ -4,6 +4,7 @@ import { Header } from '../components/Header';
 import { Footer } from '../components/Footer';
 import { Toast } from '../components/Toast';
 import { EmptyState } from '../components/EmptyState';
+import { SafeImage } from '../components/SafeImage';
 import { useCartStore } from '../store/cartStore';
 import { useToastStore } from '../store/toastStore';
 import { itemsService } from '../services/itemsService';
@@ -113,8 +114,6 @@ export const CartPage: React.FC = () => {
                       item.purchaseMode === 'auction'
                         ? (item.currentBid ?? 0)
                         : (item.price ?? 0);
-                    const canChangeQty =
-                      item.purchaseMode === 'buy-now' && (item.stock ?? 1) > 1;
 
                     return (
                       <tr key={item.id} className="hairline-b hover:bg-surface/30">
@@ -123,7 +122,7 @@ export const CartPage: React.FC = () => {
                             to={`/items/${item.id}`}
                             className="block w-12 h-12 bg-surface border border-hairline overflow-hidden p-0.5 flex items-center justify-center"
                           >
-                            <img
+                            <SafeImage
                               src={item.images[0]}
                               alt={item.title}
                               className="max-w-full max-h-full object-contain"
@@ -147,27 +146,7 @@ export const CartPage: React.FC = () => {
                         <td className="py-2 pr-3 font-mono text-sm">{formatCurrency(price)}</td>
 
                         <td className="py-2 pr-3 text-center">
-                          {canChangeQty ? (
-                            <div className="inline-flex items-center border border-hairline">
-                              <button
-                                type="button"
-                                onClick={() => updateQuantity(item.id, quantity - 1)}
-                                className="px-1.5 py-0.5 hover:bg-surface"
-                              >
-                                -
-                              </button>
-                              <span className="px-2 font-mono text-xs">{quantity}</span>
-                              <button
-                                type="button"
-                                onClick={() => updateQuantity(item.id, quantity + 1)}
-                                className="px-1.5 py-0.5 hover:bg-surface"
-                              >
-                                +
-                              </button>
-                            </div>
-                          ) : (
-                            <span className="font-mono text-xs text-secondary">1</span>
-                          )}
+                          <span className="font-mono text-xs text-secondary">1</span>
                         </td>
 
                         <td className="py-2 pr-3 font-semibold font-mono text-right">

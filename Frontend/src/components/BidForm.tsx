@@ -44,6 +44,30 @@ export const BidForm: React.FC<BidFormProps> = ({ item, onSuccess }) => {
     );
   }
 
+  // Sold / Closed / Auction ended check
+  const isSold = item.status === 'sold';
+  const isBidOver = item.status === 'ended' || isSold || (item.endTime ? new Date(item.endTime).getTime() <= Date.now() : false);
+  if (isBidOver) {
+    return (
+      <div className="bg-accent/5 border border-accent p-3.5 text-left space-y-2" id="bid">
+        <div className="flex items-center gap-2">
+          <span className="w-2.5 h-2.5 rounded-full bg-accent inline-block"></span>
+          <span className="text-xs font-bold uppercase tracking-wider text-accent">
+            {isSold ? 'Item Sold' : 'Bidding Concluded'}
+          </span>
+        </div>
+        <p className="text-xs text-secondary leading-relaxed">
+          {isSold
+            ? 'This lot has already been sold. Bidding is permanently closed.'
+            : 'Bidding on this lot has ended. No further bids can be accepted.'}
+        </p>
+        <div className="text-xs font-mono text-primary pt-1 hairline-t">
+          Final Winning Bid: <span className="font-bold text-accent">{formatCurrency(item.currentBid ?? item.startingBid ?? 0)}</span>
+        </div>
+      </div>
+    );
+  }
+
   // Consignor restriction — consignors cannot place bids on their own consigned lots
   const isConsignor = Boolean(user?.id && item.sellerId && user.id === item.sellerId);
   if (isConsignor) {
@@ -130,9 +154,9 @@ export const BidForm: React.FC<BidFormProps> = ({ item, onSuccess }) => {
       {step === 'input' ? (
         <form onSubmit={handleInitialSubmit} className="space-y-2">
           <div className="flex items-center gap-2">
-            <div className="relative flex-1">
-              <span className="absolute left-2 top-1/2 -translate-y-1/2 text-secondary text-sm font-medium">
-                Rs.
+            <div className="flex-1 flex items-center border border-hairline bg-background focus-within:border-primary transition-colors duration-150">
+              <span className="px-2.5 py-1 text-xs font-semibold text-secondary bg-surface border-r border-hairline select-none">
+                NPR
               </span>
               <input
                 type="number"
@@ -140,7 +164,7 @@ export const BidForm: React.FC<BidFormProps> = ({ item, onSuccess }) => {
                 min={minBid}
                 value={bidAmount}
                 onChange={(e) => setBidAmount(Number(e.target.value))}
-                className="input-field pl-9 text-sm"
+                className="w-full px-2.5 py-1 text-sm bg-transparent text-primary outline-none focus:outline-none"
                 required
                 disabled={isSubmitting}
               />

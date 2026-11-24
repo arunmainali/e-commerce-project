@@ -68,6 +68,12 @@ function sortItems(items: Item[], sort?: Filters['sort']): Item[] {
 }
 
 export const itemsService = {
+  soldItemIds: new Set<string>(),
+
+  markAsSold(id: string) {
+    itemsService.soldItemIds.add(id);
+  },
+
   async getItems(filters: Filters = {}): Promise<PaginatedResult<Item>> {
     try {
       const params = new URLSearchParams();
@@ -84,10 +90,14 @@ export const itemsService = {
       if (filters.page) params.set('page', String(filters.page));
       params.set('pageSize', String(PAGE_SIZE));
 
-      return await apiFetch<PaginatedResult<Item>>(`/items?${params.toString()}`);
+      const res = await apiFetch<PaginatedResult<Item>>(`/items?${params.toString()}`);
+      if (itemsService.soldItemIds.size > 0 && res.items) {
+        res.items = res.items.filter((it) => !itemsService.soldItemIds.has(it.id));
+      }
+      return res;
     } catch {
       // Graceful fallback to mock data
-      let filtered = mockItems.filter((item) => matchesFilter(item, filters));
+      let filtered = mockItems.filter((item) => !itemsService.soldItemIds.has(item.id) && matchesFilter(item, filters));
       filtered = sortItems(filtered, filters.sort);
       const page = filters.page ?? 1;
       const start = (page - 1) * PAGE_SIZE;
@@ -112,10 +122,12 @@ export const itemsService = {
 
   async search(query: string): Promise<Item[]> {
     try {
-      return await apiFetch<Item[]>(`/items/search?q=${encodeURIComponent(query)}&limit=8`);
+      const res = await apiFetch<Item[]>(`/items/search?q=${encodeURIComponent(query)}&limit=8`);
+      return res.filter((item) => !itemsService.soldItemIds.has(item.id));
     } catch {
       const q = query.toLowerCase();
       return mockItems
+        .filter((item) => !itemsService.soldItemIds.has(item.id))
         .filter((item) => {
           const s = `${item.title} ${item.category} ${item.specs.era ?? ''}`.toLowerCase();
           return s.includes(q);
@@ -126,10 +138,11 @@ export const itemsService = {
 
   async getEndingSoon(limit = 5): Promise<Item[]> {
     try {
-      return await apiFetch<Item[]>(`/items/ending-soon?limit=${limit}`);
+      const res = await apiFetch<Item[]>(`/items/ending-soon?limit=${limit}`);
+      return res.filter((item) => !itemsService.soldItemIds.has(item.id));
     } catch {
       return mockItems
-        .filter((item) => item.purchaseMode === 'auction' && item.endTime)
+        .filter((item) => !itemsService.soldItemIds.has(item.id) && item.purchaseMode === 'auction' && item.endTime)
         .sort((a, b) => new Date(a.endTime!).getTime() - new Date(b.endTime!).getTime())
         .slice(0, limit);
     }
@@ -147,6 +160,12 @@ export const itemsService = {
     return await apiFetch<Item>('/items', {
       method: 'POST',
       body: JSON.stringify(itemData),
+    });
+  },
+
+  async stopAuction(id: string): Promise<Item> {
+    return await apiFetch<Item>(`/items/${id}/stop-auction`, {
+      method: 'POST',
     });
   },
 

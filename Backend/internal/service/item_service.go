@@ -174,6 +174,61 @@ func (s *ItemService) Create(ctx context.Context, sellerID string, req dto.Creat
 	return createdItem, nil
 }
 
+func (s *ItemService) StopAuction(ctx context.Context, sellerID, itemID string) (*models.Item, error) {
+	item, err := s.itemRepo.GetByID(ctx, itemID)
+	if err != nil {
+		return nil, err
+	}
+	if item == nil {
+		return nil, errors.New("item not found")
+	}
+
+	if item.SellerID != sellerID {
+		return nil, errors.New("only the consignor can stop bidding for this lot")
+	}
+
+	if item.PurchaseMode != models.PurchaseModeAuction {
+		return nil, errors.New("only auction lots can be stopped")
+	}
+
+	if item.Status == "ended" || item.Status == "sold" {
+		return nil, errors.New("auction has already ended or been sold")
+	}
+
+	if err := s.itemRepo.EndAuction(ctx, itemID); err != nil {
+		_ = s.itemRepo.UpdateStatus(ctx, itemID, "ended")
+	}
+
+	// Fetch updated item
+	updated, err := s.itemRepo.GetByID(ctx, itemID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Find winner if any
+	highest, err := s.bidRepo.GetHighestActiveBid(ctx, nil, itemID)
+	winnerName := ""
+	winnerID := ""
+	var winningAmount int64
+	if err == nil && highest != nil {
+		winnerName = highest.Bidder
+		winnerID = highest.UserID
+		winningAmount = highest.Amount
+	}
+
+	// Broadcast AUCTION_ENDED
+	s.wsHub.Broadcast("AUCTION_ENDED", map[string]interface{}{
+		"itemId":        itemID,
+		"title":         item.Title,
+		"winnerName":    winnerName,
+		"winnerId":      winnerID,
+		"winningAmount": winningAmount,
+		"stoppedBy":     "consignor",
+	})
+
+	return updated, nil
+}
+
 func (s *ItemService) GetBySellerID(ctx context.Context, sellerID string) ([]models.Item, error) {
 	return s.itemRepo.GetBySellerID(ctx, sellerID)
 }

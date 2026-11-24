@@ -1,5 +1,6 @@
 import type { Order, ContactInfo, ShippingAddress, CartItem, Item } from '../types';
 import { apiFetch } from './api';
+import { itemsService } from './itemsService';
 import { mockItems } from '../mocks/items';
 import { trackPurchase } from './analytics';
 
@@ -23,6 +24,17 @@ export const ordersService = {
       });
 
       const order = resp.order;
+      if (order.items) {
+        order.items.forEach((it) => {
+          if (it.item?.id) {
+            itemsService.markAsSold(it.item.id);
+          } else if ((it as any).itemId) {
+            itemsService.markAsSold((it as any).itemId);
+          }
+        });
+      }
+      cartItems.forEach((ci) => itemsService.markAsSold(ci.itemId));
+
       trackPurchase(
         order.id,
         order.total,
@@ -70,6 +82,9 @@ export const ordersService = {
       };
 
       orders.push(order);
+      for (const ci of cartItems) {
+        itemsService.markAsSold(ci.itemId);
+      }
       trackPurchase(
         order.id,
         order.total,
@@ -95,7 +110,34 @@ export const ordersService = {
 
   async getOrderById(id: string): Promise<Order | null> {
     try {
-      return await apiFetch<Order>(`/orders/${id}`);
+      const resp = await apiFetch<any>(`/orders/${id}`);
+      if (!resp) return null;
+
+      // Normalize items if backend returns flat OrderItem { itemId, title, quantity, price }
+      if (Array.isArray(resp.items)) {
+        const normalizedItems = resp.items.map((it: any) => {
+          if (it.item) return it;
+          return {
+            item: {
+              id: it.itemId || it.id,
+              title: it.title || 'Catalog Item',
+              lotNumber: it.lotNumber || 'N/A',
+              category: it.category || 'general',
+              subcategory: it.subcategory || '',
+              description: it.description || '',
+              specs: it.specs || { condition: 'Good' },
+              images: it.images && it.images.length ? it.images : ['https://images.unsplash.com/photo-1579783900882-c0d3dad7b119?w=600&auto=format&fit=crop&q=80'],
+              purchaseMode: it.purchaseMode || 'buy-now',
+              price: it.price,
+              seller: it.seller || { name: 'AuctionStudio Specialist', rating: 5.0, location: 'Kathmandu' },
+              shipping: it.shipping || { cost: 0, estimatedDays: '3-5 days', methods: ['Standard Courier'] },
+            },
+            quantity: it.quantity || 1,
+          };
+        });
+        resp.items = normalizedItems;
+      }
+      return resp as Order;
     } catch {
       return orders.find((o) => o.id === id) ?? null;
     }

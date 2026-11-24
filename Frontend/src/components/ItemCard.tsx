@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import type { Item } from '../types';
 import { PriceBlock } from './PriceBlock';
 import { WishlistButton } from './WishlistButton';
+import { SafeImage } from './SafeImage';
 import { useCartStore } from '../store/cartStore';
 import { useToastStore } from '../store/toastStore';
 
@@ -15,9 +16,14 @@ export const ItemCard: React.FC<ItemCardProps> = ({ item }) => {
   const addItemToCart = useCartStore((state) => state.addItem);
   const addToast = useToastStore((state) => state.addToast);
 
+  const isSold = item.status === 'sold' || (item.purchaseMode === 'buy-now' && item.stock !== undefined && item.stock <= 0);
+  const isBidOver = item.purchaseMode === 'auction' && (item.status === 'ended' || isSold || (item.endTime ? new Date(item.endTime).getTime() <= Date.now() : false));
+  const isUnavailable = isSold || isBidOver;
+
   const handleAction = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
+    if (isUnavailable) return;
     if (item.purchaseMode === 'buy-now') {
       addItemToCart(item.id, 1);
       addToast(`Added "${item.title}" to cart`, 'success');
@@ -27,7 +33,7 @@ export const ItemCard: React.FC<ItemCardProps> = ({ item }) => {
   };
 
   return (
-    <div className="group relative flex flex-col justify-between p-2.5 hairline-b hover:bg-surface/40 transition-colors duration-150 text-left border border-hairline bg-background">
+    <div className={`group relative flex flex-col justify-between p-2.5 hairline-b hover:bg-surface/40 transition-colors duration-150 text-left border ${isUnavailable ? 'border-accent/40 bg-accent/5' : 'border-hairline bg-background'}`}>
       <div>
         {/* Compact McMaster-Carr Technical Thumbnail (Restrained h-36) */}
         <Link
@@ -35,15 +41,26 @@ export const ItemCard: React.FC<ItemCardProps> = ({ item }) => {
           className="block w-full h-36 bg-surface overflow-hidden border border-hairline mb-2 p-1 relative flex items-center justify-center group-hover:border-primary transition-colors"
           title={item.title}
         >
-          <img
+          <SafeImage
             src={item.images[0]}
             alt={item.title}
-            loading="lazy"
-            className="max-w-full max-h-full object-contain"
+            className={`max-w-full max-h-full object-contain ${isUnavailable ? 'grayscale contrast-75 opacity-75' : ''}`}
           />
-          <span className="absolute bottom-1 right-1 bg-background/90 text-primary border border-hairline px-1 py-0.2 text-[10px] font-mono">
+          {isUnavailable && (
+            <div className="absolute inset-0 bg-black/40 flex items-center justify-center z-10">
+              <span className="bg-accent text-white font-extrabold text-xs tracking-widest px-3 py-1 border border-white/60 shadow uppercase">
+                {isSold ? 'SOLD' : 'SOLD • BID OVER'}
+              </span>
+            </div>
+          )}
+          <span className="absolute bottom-1 right-1 bg-background/90 text-primary border border-hairline px-1 py-0.2 text-[10px] font-mono z-20">
             Lot {item.lotNumber}
           </span>
+          {isUnavailable && (
+            <span className="absolute top-1 left-1 bg-accent text-white font-bold text-[9px] px-1.5 py-0.5 tracking-wider uppercase z-20">
+              SOLD
+            </span>
+          )}
         </Link>
 
         {/* Metadata */}
@@ -75,10 +92,15 @@ export const ItemCard: React.FC<ItemCardProps> = ({ item }) => {
         <div className="flex items-center gap-1.5 w-full">
           <button
             type="button"
+            disabled={isUnavailable}
             onClick={handleAction}
-            className="btn-primary text-xs py-1.5 px-2 flex-1"
+            className={`text-xs py-1.5 px-2 flex-1 font-semibold ${
+              isUnavailable
+                ? 'bg-surface text-secondary border border-hairline cursor-not-allowed opacity-80'
+                : 'btn-primary'
+            }`}
           >
-            {item.purchaseMode === 'auction' ? 'Place Bid' : 'Add to Cart'}
+            {isUnavailable ? 'Sold' : (item.purchaseMode === 'auction' ? 'Place Bid' : 'Add to Cart')}
           </button>
           <WishlistButton itemId={item.id} itemTitle={item.title} />
         </div>

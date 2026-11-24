@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Header } from '../components/Header';
 import { Footer } from '../components/Footer';
 import { Toast } from '../components/Toast';
+import { SafeImage } from '../components/SafeImage';
 import { useAuthStore } from '../store/authStore';
 import { useToastStore } from '../store/toastStore';
 import { itemsService } from '../services/itemsService';
@@ -731,7 +732,7 @@ export const SellPage: React.FC = () => {
                 <div className="border border-hairline p-2 bg-surface/30">
                   <div className="w-full h-44 bg-surface border border-hairline mb-2 flex items-center justify-center overflow-hidden">
                     {images.length > 0 ? (
-                      <img src={images[0]} alt="Preview" className="max-h-full max-w-full object-contain" />
+                      <SafeImage src={images[0]} alt="Preview" className="max-h-full max-w-full object-contain" />
                     ) : (
                       <span className="text-xs text-secondary font-mono">No Image Attached</span>
                     )}

@@ -189,7 +189,7 @@ func (r *BidRepository) GetUserWonItems(ctx context.Context, userID string) ([]m
 		FROM items i
 		JOIN highest_bids hb ON i.id = hb.item_id
 		JOIN users u ON i.seller_id = u.id
-		WHERE hb.user_id = $1 AND (i.status = 'ended' OR i.end_time <= NOW())
+		WHERE hb.user_id = $1 AND (i.status = 'ended' OR (i.status = 'active' AND i.end_time <= NOW()))
 		ORDER BY i.end_time DESC
 	`
 	rows, err := r.pool.Query(ctx, query, userID)

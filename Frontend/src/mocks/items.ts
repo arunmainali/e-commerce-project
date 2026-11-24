@@ -4,8 +4,95 @@ import type { Item } from '../types';
 const hoursFromNow = (h: number): string =>
   new Date(Date.now() + h * 3600000).toISOString();
 
-const img = (seed: string, w = 400, h = 400) =>
-  `https://picsum.photos/seed/${seed}/${w}/${h}`;
+// Curated high-reliability catalog image mapping with Unsplash CDN
+const categoryImages: Record<string, string[]> = {
+  candelabra: [
+    'https://images.unsplash.com/photo-1543269865-cbf427effbad?w=800&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1513519245088-0e12902e5a38?w=800&auto=format&fit=crop&q=80',
+  ],
+  telescope: [
+    'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=800&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1506703719100-a0f3a48c0f86?w=800&auto=format&fit=crop&q=80',
+  ],
+  panther: [
+    'https://images.unsplash.com/photo-1579783900882-c0d3dad7b119?w=800&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1544967082-d9d25d867d66?w=800&auto=format&fit=crop&q=80',
+  ],
+  rug: [
+    'https://images.unsplash.com/photo-1600121848594-d8644e57abab?w=800&auto=format&fit=crop&q=80',
+  ],
+  mantelclock: [
+    'https://images.unsplash.com/photo-1508057198894-247b23fe5ade?w=800&auto=format&fit=crop&q=80',
+  ],
+  sideboard: [
+    'https://images.unsplash.com/photo-1538688525198-9b88f6f53126?w=800&auto=format&fit=crop&q=80',
+  ],
+  pembroke: [
+    'https://images.unsplash.com/photo-1533090161767-e6ffed986c88?w=800&auto=format&fit=crop&q=80',
+  ],
+  chesterfield: [
+    'https://images.unsplash.com/photo-1555041469-a586c61ea9bc?w=800&auto=format&fit=crop&q=80',
+  ],
+  chest: [
+    'https://images.unsplash.com/photo-1595428774223-ef52624120d2?w=800&auto=format&fit=crop&q=80',
+  ],
+  eames: [
+    'https://images.unsplash.com/photo-1586023492125-27b2c045efd7?w=800&auto=format&fit=crop&q=80',
+  ],
+  meissen: [
+    'https://images.unsplash.com/photo-1615529328331-f8917597711f?w=800&auto=format&fit=crop&q=80',
+  ],
+  murano: [
+    'https://images.unsplash.com/photo-1578749556568-bc2c40e68b61?w=800&auto=format&fit=crop&q=80',
+  ],
+  wedgwood: [
+    'https://images.unsplash.com/photo-1565193566173-7a0ee3dbe261?w=800&auto=format&fit=crop&q=80',
+  ],
+  floradanica: [
+    'https://images.unsplash.com/photo-1577083552431-6e5fd01aa342?w=800&auto=format&fit=crop&q=80',
+  ],
+  omega: [
+    'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=800&auto=format&fit=crop&q=80',
+  ],
+  vienna: [
+    'https://images.unsplash.com/photo-1509198397868-475647b2a1e5?w=800&auto=format&fit=crop&q=80',
+  ],
+  pocketwatch: [
+    'https://images.unsplash.com/photo-1522335789203-aabd1fc54bc9?w=800&auto=format&fit=crop&q=80',
+  ],
+  cartier: [
+    'https://images.unsplash.com/photo-1509042239860-f550ce710b93?w=800&auto=format&fit=crop&q=80',
+  ],
+  art: [
+    'https://images.unsplash.com/photo-1579783901586-d88db74b4fe4?w=800&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1579783900882-c0d3dad7b119?w=800&auto=format&fit=crop&q=80',
+  ],
+  jewellery: [
+    'https://images.unsplash.com/photo-1599643478518-a784e5dc4c8f?w=800&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1605100804763-247f67b3557e?w=800&auto=format&fit=crop&q=80',
+  ],
+  book: [
+    'https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?w=800&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1524995997946-a1c2e315a42f?w=800&auto=format&fit=crop&q=80',
+  ],
+  camera: [
+    'https://images.unsplash.com/photo-1526170375885-4d8ecf77b99f?w=800&auto=format&fit=crop&q=80',
+  ],
+  electronics: [
+    'https://images.unsplash.com/photo-1550745165-9bc0b252726f?w=800&auto=format&fit=crop&q=80',
+  ],
+};
+
+const img = (seed: string, _w = 800, _h = 600) => {
+  const cleanKey = seed.replace(/[0-9]/g, '').toLowerCase();
+  for (const [k, urls] of Object.entries(categoryImages)) {
+    if (cleanKey.includes(k) || k.includes(cleanKey)) {
+      const idx = seed.match(/\d+/) ? parseInt(seed.match(/\d+/)![0], 10) - 1 : 0;
+      return urls[idx % urls.length] || urls[0];
+    }
+  }
+  return `https://images.unsplash.com/photo-1579783900882-c0d3dad7b119?w=800&auto=format&fit=crop&q=80`;
+};
 
 export const mockItems: Item[] = [
   // ── Antiques ──────────────────────────────────────

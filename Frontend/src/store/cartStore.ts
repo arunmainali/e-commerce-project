@@ -4,7 +4,7 @@ import type { CartItem } from '../types';
 
 interface CartState {
   items: CartItem[];
-  addItem: (itemId: string, quantity?: number) => void;
+  addItem: (itemId: string, quantity?: number) => boolean;
   removeItem: (itemId: string) => void;
   updateQuantity: (itemId: string, quantity: number) => void;
   clearCart: () => void;
@@ -15,17 +15,14 @@ export const useCartStore = create<CartState>()(
   persist(
     (set, get) => ({
       items: [],
-      addItem: (itemId, quantity = 1) => {
+      addItem: (itemId, _quantity = 1) => {
         const existing = get().items.find((i) => i.itemId === itemId);
         if (existing) {
-          set({
-            items: get().items.map((i) =>
-              i.itemId === itemId ? { ...i, quantity: i.quantity + quantity } : i
-            ),
-          });
-        } else {
-          set({ items: [...get().items, { itemId, quantity }] });
+          // Unique items: only 1 pcs per item allowed, cannot be added again
+          return false;
         }
+        set({ items: [...get().items, { itemId, quantity: 1 }] });
+        return true;
       },
       removeItem: (itemId) => {
         set({ items: get().items.filter((i) => i.itemId !== itemId) });
@@ -35,14 +32,15 @@ export const useCartStore = create<CartState>()(
           get().removeItem(itemId);
           return;
         }
+        // Force max quantity to 1 for unique lots
         set({
           items: get().items.map((i) =>
-            i.itemId === itemId ? { ...i, quantity } : i
+            i.itemId === itemId ? { ...i, quantity: 1 } : i
           ),
         });
       },
       clearCart: () => set({ items: [] }),
-      getCount: () => get().items.reduce((sum, i) => sum + i.quantity, 0),
+      getCount: () => get().items.length,
     }),
     { name: 'auction-studio-cart' }
   )

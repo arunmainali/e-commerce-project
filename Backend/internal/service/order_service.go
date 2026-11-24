@@ -17,6 +17,7 @@ import (
 type OrderService struct {
 	orderRepo   *repository.OrderRepository
 	cartRepo    *repository.CartRepository
+	itemRepo    *repository.ItemRepository
 	paymentRepo *repository.PaymentRepository
 	paymentProv payment.Provider
 	cfg         *config.Config
@@ -25,6 +26,7 @@ type OrderService struct {
 func NewOrderService(
 	orderRepo *repository.OrderRepository,
 	cartRepo *repository.CartRepository,
+	itemRepo *repository.ItemRepository,
 	paymentRepo *repository.PaymentRepository,
 	paymentProv payment.Provider,
 	cfg *config.Config,
@@ -32,6 +34,7 @@ func NewOrderService(
 	return &OrderService{
 		orderRepo:   orderRepo,
 		cartRepo:    cartRepo,
+		itemRepo:    itemRepo,
 		paymentRepo: paymentRepo,
 		paymentProv: paymentProv,
 		cfg:         cfg,
@@ -110,6 +113,11 @@ func (s *OrderService) CreateOrder(ctx context.Context, userID string, req dto.C
 
 	if err := tx.Commit(ctx); err != nil {
 		return nil, fmt.Errorf("commit order: %w", err)
+	}
+
+	// Mark purchased items as sold so they no longer appear in available listings
+	for _, ci := range cartItems {
+		_ = s.itemRepo.UpdateStatus(ctx, ci.Item.ID, "sold")
 	}
 
 	// Clear the user's cart

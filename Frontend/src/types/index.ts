@@ -51,6 +51,7 @@ export interface Item {
   specs: ItemSpecs;
   images: string[];
   purchaseMode: PurchaseMode;
+  status?: string;
   // Buy Now fields
   price?: number;
   stock?: number;
@@ -133,7 +134,7 @@ export interface Filters {
   page?: number;
 }
 
-export type ViewMode = 'list' | 'grid';
+export type ViewMode = 'grid' | 'list';
 
 export interface PaginatedResult<T> {
   items: T[];

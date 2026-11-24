@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import { Header } from '../components/Header';
 import { Footer } from '../components/Footer';
 import { Toast } from '../components/Toast';
@@ -11,6 +11,7 @@ import { SpecsTable } from '../components/SpecsTable';
 import { BidHistoryTable } from '../components/BidHistoryTable';
 import { Countdown } from '../components/Countdown';
 import { EmptyState } from '../components/EmptyState';
+import { SafeImage } from '../components/SafeImage';
 import { itemsService } from '../services/itemsService';
 import { useAuthStore } from '../store/authStore';
 import { useCartStore } from '../store/cartStore';
@@ -21,16 +22,20 @@ import type { Item } from '../types';
 
 export const ItemDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const [item, setItem] = useState<Item | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeImageIndex, setActiveImageIndex] = useState(0);
   const [isViewerOpen, setIsViewerOpen] = useState(false);
   const [scrolledPastHero, setScrolledPastHero] = useState(false);
+  const [stoppingAuction, setStoppingAuction] = useState(false);
 
+  const cartItems = useCartStore((state) => state.items);
   const addItemToCart = useCartStore((state) => state.addItem);
   const addToast = useToastStore((state) => state.addToast);
   const user = useAuthStore((state) => state.user);
   const isConsignor = Boolean(user?.id && item?.sellerId && user.id === item.sellerId);
+  const isInCart = Boolean(item && cartItems.some((ci) => ci.itemId === item.id));
 
   const loadItem = () => {
     if (!id) return;
@@ -118,8 +123,41 @@ export const ItemDetailPage: React.FC = () => {
   }
 
   const handleAddToCart = () => {
-    addItemToCart(item.id, 1);
-    addToast(`Added "${item.title}" to cart`, 'success');
+    if (isInCart) {
+      addToast(`"${item.title}" is already in your cart`, 'info');
+      return;
+    }
+    const added = addItemToCart(item.id, 1);
+    if (added) {
+      addToast(`Added "${item.title}" to cart`, 'success');
+    } else {
+      addToast(`"${item.title}" is already in your cart`, 'info');
+    }
+  };
+
+  const handleBuyNowDirectly = () => {
+    if (!isInCart) {
+      addItemToCart(item.id, 1);
+    }
+    navigate('/checkout');
+  };
+
+  const handleStopBidding = async () => {
+    if (!item) return;
+    if (!window.confirm('Are you sure you want to stop bidding on this auction lot? The current highest bidder will immediately win this lot.')) {
+      return;
+    }
+    setStoppingAuction(true);
+    try {
+      const updated = await itemsService.stopAuction(item.id);
+      setItem(updated);
+      addToast('Auction has been stopped. The winning bidder can now settle the invoice.', 'success');
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to stop auction';
+      addToast(msg, 'error');
+    } finally {
+      setStoppingAuction(false);
+    }
   };
 
   const breadcrumbs = [
@@ -140,6 +178,10 @@ export const ItemDetailPage: React.FC = () => {
       ? (item.currentBid ?? item.startingBid ?? 0)
       : (item.price ?? 0);
 
+  const isSold = item.status === 'sold' || (item.purchaseMode === 'buy-now' && item.stock !== undefined && item.stock <= 0);
+  const isBidOver = item.purchaseMode === 'auction' && (item.status === 'ended' || isSold || (item.endTime ? new Date(item.endTime).getTime() <= Date.now() : false));
+  const isUnavailable = isSold || isBidOver;
+
   return (
     <div className="min-h-screen flex flex-col bg-background text-primary">
       <Header />
@@ -149,7 +191,7 @@ export const ItemDetailPage: React.FC = () => {
         <div className="sticky top-14 left-0 right-0 z-30 bg-background/95 backdrop-blur-sm hairline-b py-2 px-3 shadow-none transition-all">
           <div className="max-w-[1440px] mx-auto flex items-center justify-between gap-4">
             <div className="flex items-center gap-3 min-w-0">
-              <img
+              <SafeImage
                 src={item.images[0]}
                 alt={item.title}
                 className="w-10 h-10 object-contain border border-hairline bg-surface flex-shrink-0"
@@ -181,22 +223,54 @@ export const ItemDetailPage: React.FC = () => {
               </div>
 
               {/* Action Button */}
-              {isConsignor ? (
-                <span className="text-xs font-mono text-secondary px-2.5 py-1 border border-hairline bg-surface whitespace-nowrap">
-                  Your Consigned Lot
-                </span>
+              {isUnavailable ? (
+                <div className="flex items-center gap-2">
+                  <span className="bg-accent text-white font-bold text-xs py-1 px-3 uppercase tracking-wider">
+                    {isSold ? 'SOLD' : 'BID OVER'}
+                  </span>
+                </div>
+              ) : isConsignor ? (
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-mono text-secondary px-2.5 py-1 border border-hairline bg-surface whitespace-nowrap">
+                    Your Consigned Lot
+                  </span>
+                  {item.purchaseMode === 'auction' && item.status !== 'ended' && item.status !== 'sold' && (
+                    <button
+                      type="button"
+                      onClick={handleStopBidding}
+                      disabled={stoppingAuction}
+                      className="bg-accent text-white hover:bg-accent/90 text-xs py-1 px-2.5 font-semibold whitespace-nowrap"
+                    >
+                      {stoppingAuction ? 'Stopping…' : 'Stop Bidding'}
+                    </button>
+                  )}
+                </div>
               ) : item.purchaseMode === 'auction' ? (
                 <a href="#bid" className="btn-primary text-xs py-1.5 px-3 whitespace-nowrap">
                   Place Bid
                 </a>
               ) : (
-                <button
-                  type="button"
-                  onClick={handleAddToCart}
-                  className="btn-primary text-xs py-1.5 px-3 whitespace-nowrap"
-                >
-                  Add to Cart
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleBuyNowDirectly}
+                    className="btn-primary text-xs py-1.5 px-3 whitespace-nowrap"
+                  >
+                    Buy Directly
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleAddToCart}
+                    disabled={isInCart}
+                    className={`text-xs py-1.5 px-3 whitespace-nowrap ${
+                      isInCart
+                        ? 'bg-surface text-secondary border border-hairline cursor-default'
+                        : 'btn-secondary'
+                    }`}
+                  >
+                    {isInCart ? 'In Cart' : 'Add to Cart'}
+                  </button>
+                </div>
               )}
               <WishlistButton itemId={item.id} itemTitle={item.title} />
             </div>
@@ -213,21 +287,31 @@ export const ItemDetailPage: React.FC = () => {
           <div className="col-span-4 md:col-span-4 lg:col-span-4 flex flex-col gap-2">
             {/* Main Stage Image: Compact 260px height container */}
             <div className="w-full h-64 bg-surface border border-hairline relative flex items-center justify-center p-2 group">
-              <img
+              <SafeImage
                 src={item.images[activeImageIndex]}
                 alt={`${item.title} - view ${activeImageIndex + 1}`}
-                className="max-w-full max-h-full object-contain cursor-zoom-in"
+                className={`max-w-full max-h-full object-contain cursor-zoom-in ${isUnavailable ? 'grayscale contrast-75 opacity-75' : ''}`}
                 onClick={() => setIsViewerOpen(true)}
               />
+              {isUnavailable && (
+                <div className="absolute inset-0 bg-black/40 flex flex-col items-center justify-center pointer-events-none z-10">
+                  <span className="bg-accent text-white font-extrabold text-base md:text-xl px-5 py-2 tracking-widest border-2 border-white uppercase shadow-lg">
+                    {isSold ? 'SOLD' : 'BID OVER • SOLD'}
+                  </span>
+                  <span className="text-white text-xs font-mono mt-1 drop-shadow font-semibold">
+                    {isSold ? 'Item Purchased & Invoiced' : 'Bidding Has Concluded'}
+                  </span>
+                </div>
+              )}
               <button
                 type="button"
                 onClick={() => setIsViewerOpen(true)}
-                className="absolute top-2 right-2 bg-background/90 hover:bg-background border border-hairline text-secondary hover:text-primary px-1.5 py-0.5 text-xs font-mono"
+                className="absolute top-2 right-2 bg-background/90 hover:bg-background border border-hairline text-secondary hover:text-primary px-1.5 py-0.5 text-xs font-mono z-20"
                 title="Open full inspection viewer"
               >
                 🔍 Enlarge
               </button>
-              <span className="absolute bottom-2 left-2 bg-background/90 text-primary border border-hairline px-1.5 py-0.5 text-[11px] font-mono">
+              <span className="absolute bottom-2 left-2 bg-background/90 text-primary border border-hairline px-1.5 py-0.5 text-[11px] font-mono z-20">
                 {activeImageIndex + 1} of {item.images.length}
               </span>
             </div>
@@ -252,7 +336,7 @@ export const ItemDetailPage: React.FC = () => {
                         : 'border-hairline hover:border-secondary'
                     }`}
                   >
-                    <img
+                    <SafeImage
                       src={imgUrl}
                       alt={`Thumbnail ${idx + 1}`}
                       className="max-w-full max-h-full object-contain"
@@ -274,10 +358,19 @@ export const ItemDetailPage: React.FC = () => {
             {/* Title & Lot Header */}
             <div className="hairline-b pb-2">
               <div className="flex items-center justify-between text-xs text-secondary font-mono mb-1">
-                <span className="font-semibold bg-surface px-1.5 py-0.5 border border-hairline text-primary">
-                  LOT #{item.lotNumber}
+                <div className="flex items-center gap-2">
+                  <span className="font-semibold bg-surface px-1.5 py-0.5 border border-hairline text-primary">
+                    LOT #{item.lotNumber}
+                  </span>
+                  {isUnavailable && (
+                    <span className="bg-accent text-white text-xs font-bold px-2 py-0.5 uppercase tracking-wider">
+                      {isSold ? 'SOLD' : 'BID OVER'}
+                    </span>
+                  )}
+                </div>
+                <span className="uppercase text-[11px]">
+                  {isUnavailable ? 'LOT CLOSED' : `${item.specs.condition} Condition`}
                 </span>
-                <span className="uppercase text-[11px]">{item.specs.condition} Condition</span>
               </div>
               <h1 className="text-lg font-semibold text-primary leading-snug">{item.title}</h1>
             </div>
@@ -301,8 +394,50 @@ export const ItemDetailPage: React.FC = () => {
 
               {/* Right half: Immediate Action & Bidding Form */}
               <div className="border-t sm:border-t-0 sm:border-l border-hairline sm:pl-3 flex flex-col justify-between">
-                {item.purchaseMode === 'auction' ? (
-                  <BidForm item={item} onSuccess={loadItem} />
+                {isUnavailable ? (
+                  <div className="bg-accent/5 border border-accent p-4 text-left space-y-2.5">
+                    <div className="flex items-center gap-2">
+                      <span className="w-2.5 h-2.5 rounded-full bg-accent inline-block"></span>
+                      <span className="text-xs font-bold uppercase tracking-wider text-accent">
+                        {isSold ? 'Item Sold' : 'Auction Closed • Bidding Over'}
+                      </span>
+                    </div>
+                    <p className="text-xs text-secondary leading-relaxed">
+                      {isSold
+                        ? 'This item has been purchased and is no longer available in the active catalog.'
+                        : 'Bidding on this lot has ended. No further bids or purchases can be accepted.'}
+                    </p>
+                    <div className="pt-2 hairline-t flex items-center justify-between text-xs font-mono">
+                      <span className="text-secondary">
+                        {item.purchaseMode === 'auction' ? 'Final Hammer Bid:' : 'Sold Price:'}
+                      </span>
+                      <span className="font-bold text-accent text-sm">
+                        {formatCurrency(currentPrice)}
+                      </span>
+                    </div>
+                  </div>
+                ) : item.purchaseMode === 'auction' ? (
+                  <div className="space-y-3">
+                    <BidForm item={item} onSuccess={loadItem} />
+                    {isConsignor && item.status !== 'ended' && item.status !== 'sold' && (
+                      <div className="p-3 bg-accent/5 border border-accent/30 text-left space-y-2">
+                        <div className="text-xs font-semibold text-accent uppercase tracking-wider">
+                          Consignor Control
+                        </div>
+                        <p className="text-xs text-secondary">
+                          As the consignor, you can stop bidding at any time. The highest current bid will win the auction lot and be placed in the winner's account for settlement.
+                        </p>
+                        <button
+                          type="button"
+                          onClick={handleStopBidding}
+                          disabled={stoppingAuction}
+                          className="btn-accent w-full py-2 text-xs font-semibold"
+                        >
+                          {stoppingAuction ? 'Ending Auction…' : 'Stop Bidding & Award Highest Bidder'}
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 ) : isConsignor ? (
                   <div className="bg-surface/50 p-4 border border-hairline text-left space-y-1.5">
                     <div className="text-xs font-semibold uppercase tracking-wider text-primary">
@@ -313,13 +448,25 @@ export const ItemDetailPage: React.FC = () => {
                     </p>
                   </div>
                 ) : (
-                  <div className="space-y-2">
+                  <div className="space-y-2.5">
+                    <button
+                      type="button"
+                      onClick={handleBuyNowDirectly}
+                      className="btn-primary w-full py-2.5 text-sm font-semibold tracking-wide"
+                    >
+                      Buy Directly • {formatCurrency(item.price ?? 0)}
+                    </button>
                     <button
                       type="button"
                       onClick={handleAddToCart}
-                      className="btn-primary w-full py-2.5 text-sm"
+                      disabled={isInCart}
+                      className={`w-full py-2 text-xs font-medium ${
+                        isInCart
+                          ? 'bg-surface text-secondary border border-hairline cursor-default'
+                          : 'btn-secondary'
+                      }`}
                     >
-                      Add to Cart • {formatCurrency(item.price ?? 0)}
+                      {isInCart ? 'In Cart • 1 Lot' : 'Add to Cart'}
                     </button>
                     <p className="text-[11px] text-secondary">
                       Fixed price catalog purchase. Ships within {item.shipping.estimatedDays}.
@@ -436,9 +583,14 @@ export const ItemDetailPage: React.FC = () => {
                     handleAddToCart();
                     setIsViewerOpen(false);
                   }}
-                  className="btn-primary text-xs py-1.5 px-3"
+                  disabled={isInCart}
+                  className={`text-xs py-1.5 px-3 ${
+                    isInCart
+                      ? 'bg-surface text-secondary border border-hairline cursor-default'
+                      : 'btn-primary'
+                  }`}
                 >
-                  Add to Cart
+                  {isInCart ? 'In Cart' : 'Add to Cart'}
                 </button>
               )}
 
@@ -455,7 +607,7 @@ export const ItemDetailPage: React.FC = () => {
 
           {/* Central Stage: High Resolution Image */}
           <div className="flex-1 flex items-center justify-center p-4 overflow-hidden max-w-5xl w-full mx-auto">
-            <img
+            <SafeImage
               src={item.images[activeImageIndex]}
               alt={`${item.title} enlarged`}
               className="max-h-[70vh] max-w-full object-contain border border-hairline bg-surface p-2"
@@ -474,7 +626,7 @@ export const ItemDetailPage: React.FC = () => {
                     activeImageIndex === idx ? 'border-primary ring-1 ring-primary' : 'border-hairline'
                   }`}
                 >
-                  <img src={imgUrl} alt={`Thumbnail ${idx + 1}`} className="w-full h-full object-contain" />
+                  <SafeImage src={imgUrl} alt={`Thumbnail ${idx + 1}`} className="w-full h-full object-contain" />
                 </button>
               ))}
             </div>

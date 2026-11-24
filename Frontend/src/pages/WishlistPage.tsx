@@ -5,6 +5,7 @@ import { Footer } from '../components/Footer';
 import { Toast } from '../components/Toast';
 import { EmptyState } from '../components/EmptyState';
 import { Countdown } from '../components/Countdown';
+import { SafeImage } from '../components/SafeImage';
 import { useWishlistStore } from '../store/wishlistStore';
 import { useCartStore } from '../store/cartStore';
 import { useToastStore } from '../store/toastStore';
@@ -90,23 +91,42 @@ export const WishlistPage: React.FC = () => {
                 </tr>
               </thead>
               <tbody>
-                {items.map((item) => (
+                {items.map((item) => {
+                  const isSold = item.status === 'sold' || (item.purchaseMode === 'buy-now' && item.stock !== undefined && item.stock <= 0);
+                  const isBidOver = item.purchaseMode === 'auction' && (item.status === 'ended' || isSold || (item.endTime ? new Date(item.endTime).getTime() <= Date.now() : false));
+                  const isUnavailable = isSold || isBidOver;
+
+                  return (
                   <tr key={item.id} className="hairline-b hover:bg-surface/40 transition-colors">
                     <td className="py-2 pr-3">
                       <Link
                         to={`/items/${item.id}`}
-                        className="block w-12 h-12 bg-surface border border-hairline overflow-hidden p-0.5 flex items-center justify-center"
+                        className="block w-12 h-12 bg-surface border border-hairline overflow-hidden p-0.5 relative flex items-center justify-center"
                       >
-                        <img
+                        <SafeImage
                           src={item.images[0]}
                           alt={item.title}
-                          className="max-w-full max-h-full object-contain"
+                          className={`max-w-full max-h-full object-contain ${isUnavailable ? 'grayscale opacity-75' : ''}`}
                         />
+                        {isUnavailable && (
+                          <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
+                            <span className="text-[8px] font-bold text-white bg-accent px-0.5 uppercase">
+                              SOLD
+                            </span>
+                          </div>
+                        )}
                       </Link>
                     </td>
 
                     <td className="py-2 pr-3">
-                      <div className="text-xs font-mono text-secondary">Lot {item.lotNumber}</div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-xs font-mono text-secondary">Lot {item.lotNumber}</span>
+                        {isUnavailable && (
+                          <span className="bg-accent text-white text-[9px] font-bold px-1 uppercase">
+                            SOLD
+                          </span>
+                        )}
+                      </div>
                       <Link
                         to={`/items/${item.id}`}
                         className="font-semibold text-primary hover:underline block truncate max-w-sm"
@@ -117,7 +137,9 @@ export const WishlistPage: React.FC = () => {
                     </td>
 
                     <td className="py-2 pr-3 text-xs">
-                      {item.purchaseMode === 'auction' ? (
+                      {isUnavailable ? (
+                        <span className="text-accent font-bold uppercase text-[11px]">Sold / Closed</span>
+                      ) : item.purchaseMode === 'auction' ? (
                         <div>
                           <span className="font-semibold text-primary">Auction</span>
                           {item.endTime && (
@@ -146,7 +168,11 @@ export const WishlistPage: React.FC = () => {
 
                     <td className="py-2 text-right">
                       <div className="flex items-center justify-end gap-2">
-                        {item.purchaseMode === 'buy-now' ? (
+                        {isUnavailable ? (
+                          <span className="bg-surface text-secondary border border-hairline text-xs py-1 px-2.5 font-medium cursor-not-allowed">
+                            {isSold ? 'Sold' : 'Bid Over'}
+                          </span>
+                        ) : item.purchaseMode === 'buy-now' ? (
                           <button
                             type="button"
                             onClick={() => handleAddToCart(item)}
@@ -174,7 +200,7 @@ export const WishlistPage: React.FC = () => {
                       </div>
                     </td>
                   </tr>
-                ))}
+                );})}
               </tbody>
             </table>
           </div>

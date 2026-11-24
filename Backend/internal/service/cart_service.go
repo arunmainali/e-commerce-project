@@ -26,10 +26,6 @@ func (s *CartService) GetCart(ctx context.Context, userID string) ([]dto.CartIte
 }
 
 func (s *CartService) AddItem(ctx context.Context, userID, itemID string, quantity int) error {
-	if quantity <= 0 {
-		quantity = 1
-	}
-
 	item, err := s.itemRepo.GetByID(ctx, itemID)
 	if err != nil || item == nil {
 		return errors.New("item not found")
@@ -40,7 +36,7 @@ func (s *CartService) AddItem(ctx context.Context, userID, itemID string, quanti
 	}
 
 	cartID := "cart-" + uuid.New().String()[:8]
-	return s.cartRepo.AddItem(ctx, cartID, userID, itemID, quantity)
+	return s.cartRepo.AddItem(ctx, cartID, userID, itemID, 1)
 }
 
 func (s *CartService) UpdateQuantity(ctx context.Context, userID, itemID string, quantity int) error {

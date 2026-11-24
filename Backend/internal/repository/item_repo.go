@@ -22,6 +22,16 @@ func NewItemRepository(pool *pgxpool.Pool) *ItemRepository {
 	return &ItemRepository{pool: pool}
 }
 
+func (r *ItemRepository) Pool() *pgxpool.Pool {
+	return r.pool
+}
+
+func (r *ItemRepository) EndAuction(ctx context.Context, itemID string) error {
+	query := `UPDATE items SET status = 'ended', end_time = NOW(), updated_at = NOW() WHERE id = $1`
+	_, err := r.pool.Exec(ctx, query, itemID)
+	return err
+}
+
 func (r *ItemRepository) Create(ctx context.Context, item *models.Item) error {
 	imagesJSON, _ := json.Marshal(item.Images)
 	shippingMethodsJSON, _ := json.Marshal(item.Shipping.Methods)
@@ -67,12 +77,13 @@ func (r *ItemRepository) GetByID(ctx context.Context, id string) (*models.Item, 
 			i.minimum_increment, i.bid_count, i.end_time, i.seller_id,
 			i.shipping_cost, i.shipping_estimated_days, i.shipping_methods,
 			i.created_at, i.updated_at,
-			u.name, u.rating, u.location
+			u.name, u.rating, u.location,
+			i.status
 		FROM items i
 		JOIN users u ON i.seller_id = u.id
 		WHERE i.id = $1
 	`
-	return r.scanItem(r.pool.QueryRow(ctx, query, id))
+	return r.scanItemWithStatus(r.pool.QueryRow(ctx, query, id))
 }
 
 func (r *ItemRepository) GetByIDForUpdate(ctx context.Context, tx pgx.Tx, id string) (*models.Item, error) {
@@ -224,7 +235,7 @@ func (r *ItemRepository) Search(ctx context.Context, q string, limit int) ([]mod
 			u.name, u.rating, u.location
 		FROM items i
 		JOIN users u ON i.seller_id = u.id
-		WHERE (
+		WHERE i.status = 'active' AND (
 			LOWER(i.title) LIKE $1 OR
 			LOWER(i.category_slug) LIKE $1 OR
 			LOWER(i.subcategory) LIKE $1 OR
@@ -251,7 +262,7 @@ func (r *ItemRepository) Search(ctx context.Context, q string, limit int) ([]mod
 }
 
 func (r *ItemRepository) List(ctx context.Context, f dto.ItemFilterParams) (*models.PaginatedResult[models.Item], error) {
-	where := []string{"1=1"}
+	where := []string{"i.status = 'active'"}
 	args := []interface{}{}
 	argIdx := 1
 
@@ -381,6 +392,45 @@ func (r *ItemRepository) List(ctx context.Context, f dto.ItemFilterParams) (*mod
 		PageSize:   pageSize,
 		TotalPages: totalPages,
 	}, nil
+}
+
+func (r *ItemRepository) scanItemWithStatus(row pgx.Row) (*models.Item, error) {
+	var item models.Item
+	var imagesBytes []byte
+	var methodsBytes []byte
+
+	err := row.Scan(
+		&item.ID, &item.Title, &item.LotNumber, &item.CategorySlug, &item.Subcategory, &item.Description,
+		&item.Specs.Era, &item.Specs.Origin, &item.Specs.Material, &item.Specs.Dimensions, &item.Specs.Condition, &item.Specs.Provenance,
+		&imagesBytes, &item.PurchaseMode, &item.Price, &item.Stock, &item.CurrentBid, &item.StartingBid,
+		&item.MinimumIncrement, &item.BidCount, &item.EndTime, &item.SellerID,
+		&item.Shipping.Cost, &item.Shipping.EstimatedDays, &methodsBytes,
+		&item.CreatedAt, &item.UpdatedAt,
+		&item.SellerInfo.Name, &item.SellerInfo.Rating, &item.SellerInfo.Location,
+		&item.Status,
+	)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	if len(imagesBytes) > 0 {
+		_ = json.Unmarshal(imagesBytes, &item.Images)
+	}
+	if item.Images == nil {
+		item.Images = []string{}
+	}
+
+	if len(methodsBytes) > 0 {
+		_ = json.Unmarshal(methodsBytes, &item.Shipping.Methods)
+	}
+	if item.Shipping.Methods == nil {
+		item.Shipping.Methods = []string{}
+	}
+
+	return &item, nil
 }
 
 func (r *ItemRepository) scanItem(row pgx.Row) (*models.Item, error) {

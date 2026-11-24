@@ -68,13 +68,14 @@ func (r *CartRepository) GetByUserID(ctx context.Context, userID string) ([]dto.
 }
 
 func (r *CartRepository) AddItem(ctx context.Context, id, userID, itemID string, quantity int) error {
+	// Unique lots: max quantity is 1, and duplicate adds do not increase quantity
 	query := `
 		INSERT INTO cart_items (id, user_id, item_id, quantity, created_at)
-		VALUES ($1, $2, $3, $4, NOW())
+		VALUES ($1, $2, $3, 1, NOW())
 		ON CONFLICT (user_id, item_id)
-		DO UPDATE SET quantity = cart_items.quantity + EXCLUDED.quantity
+		DO NOTHING
 	`
-	_, err := r.pool.Exec(ctx, query, id, userID, itemID, quantity)
+	_, err := r.pool.Exec(ctx, query, id, userID, itemID)
 	return err
 }
 
@@ -82,8 +83,9 @@ func (r *CartRepository) UpdateQuantity(ctx context.Context, userID, itemID stri
 	if quantity <= 0 {
 		return r.RemoveItem(ctx, userID, itemID)
 	}
-	query := `UPDATE cart_items SET quantity = $1 WHERE user_id = $2 AND item_id = $3`
-	_, err := r.pool.Exec(ctx, query, quantity, userID, itemID)
+	// Quantity is fixed to 1 for unique lots
+	query := `UPDATE cart_items SET quantity = 1 WHERE user_id = $1 AND item_id = $2`
+	_, err := r.pool.Exec(ctx, query, userID, itemID)
 	return err
 }
 

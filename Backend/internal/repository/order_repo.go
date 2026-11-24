@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 
 	"github.com/auction-studio/backend/internal/models"
@@ -143,7 +144,19 @@ func (r *OrderRepository) UpdateStatus(ctx context.Context, orderID string, stat
 }
 
 func (r *OrderRepository) getOrderItems(ctx context.Context, orderID string) ([]models.OrderItem, error) {
-	query := `SELECT item_id, title, quantity, price FROM order_items WHERE order_id = $1`
+	query := `
+		SELECT 
+			oi.item_id, oi.title, oi.quantity, oi.price,
+			i.lot_number, i.category_slug, i.subcategory, i.description,
+			i.era, i.origin, i.material, i.dimensions, i.condition, i.provenance,
+			i.images, i.purchase_mode, i.seller_id,
+			i.shipping_cost, i.shipping_estimated_days, i.shipping_methods,
+			u.name, u.rating, u.location
+		FROM order_items oi
+		LEFT JOIN items i ON oi.item_id = i.id
+		LEFT JOIN users u ON i.seller_id = u.id
+		WHERE oi.order_id = $1
+	`
 	rows, err := r.pool.Query(ctx, query, orderID)
 	if err != nil {
 		return nil, err
@@ -153,9 +166,91 @@ func (r *OrderRepository) getOrderItems(ctx context.Context, orderID string) ([]
 	items := make([]models.OrderItem, 0)
 	for rows.Next() {
 		var item models.OrderItem
-		if err := rows.Scan(&item.ItemID, &item.Title, &item.Quantity, &item.Price); err != nil {
+		var lotNumber, categorySlug, subcategory, description *string
+		var era, origin, material, dimensions, condition, provenance *string
+		var imagesBytes, methodsBytes []byte
+		var purchaseMode, sellerID *string
+		var shippingCost *int64
+		var shippingEstDays *string
+		var sellerName, sellerLoc *string
+		var sellerRating *float64
+
+		if err := rows.Scan(
+			&item.ItemID, &item.Title, &item.Quantity, &item.Price,
+			&lotNumber, &categorySlug, &subcategory, &description,
+			&era, &origin, &material, &dimensions, &condition, &provenance,
+			&imagesBytes, &purchaseMode, &sellerID,
+			&shippingCost, &shippingEstDays, &methodsBytes,
+			&sellerName, &sellerRating, &sellerLoc,
+		); err != nil {
 			return nil, err
 		}
+
+		// Hydrate item.Item if item found
+		fullItem := models.Item{
+			ID:    item.ItemID,
+			Title: item.Title,
+		}
+		if lotNumber != nil {
+			fullItem.LotNumber = *lotNumber
+		}
+		if categorySlug != nil {
+			fullItem.CategorySlug = *categorySlug
+		}
+		if subcategory != nil {
+			fullItem.Subcategory = *subcategory
+		}
+		if description != nil {
+			fullItem.Description = *description
+		}
+		if condition != nil {
+			fullItem.Specs.Condition = *condition
+		}
+		if era != nil {
+			fullItem.Specs.Era = *era
+		}
+		if origin != nil {
+			fullItem.Specs.Origin = *origin
+		}
+		if material != nil {
+			fullItem.Specs.Material = *material
+		}
+		if dimensions != nil {
+			fullItem.Specs.Dimensions = *dimensions
+		}
+		if provenance != nil {
+			fullItem.Specs.Provenance = *provenance
+		}
+		if purchaseMode != nil {
+			fullItem.PurchaseMode = models.PurchaseMode(*purchaseMode)
+		}
+		if sellerID != nil {
+			fullItem.SellerID = *sellerID
+		}
+		if shippingCost != nil {
+			fullItem.Shipping.Cost = *shippingCost
+		}
+		if shippingEstDays != nil {
+			fullItem.Shipping.EstimatedDays = *shippingEstDays
+		}
+		if sellerName != nil {
+			fullItem.SellerInfo.Name = *sellerName
+		}
+		if sellerRating != nil {
+			fullItem.SellerInfo.Rating = *sellerRating
+		}
+		if sellerLoc != nil {
+			fullItem.SellerInfo.Location = *sellerLoc
+		}
+
+		if len(imagesBytes) > 0 {
+			_ = json.Unmarshal(imagesBytes, &fullItem.Images)
+		}
+		if fullItem.Images == nil {
+			fullItem.Images = []string{}
+		}
+
+		item.Item = &fullItem
 		items = append(items, item)
 	}
 	return items, nil

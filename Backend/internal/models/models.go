@@ -93,6 +93,7 @@ type Item struct {
 	BidCount         *int         `json:"bidCount,omitempty"`
 	EndTime          *time.Time   `json:"endTime,omitempty"`
 	SellerID         string       `json:"sellerId,omitempty"`
+	Status           string       `json:"status,omitempty"`
 	SellerInfo       Seller            `json:"seller"`
 	Shipping         ShippingInfo      `json:"shipping"`
 	CreatedAt        time.Time         `json:"createdAt"`
@@ -180,6 +181,7 @@ type OrderItem struct {
 	Title    string `json:"title"`
 	Quantity int    `json:"quantity"`
 	Price    int64  `json:"price"`
+	Item     *Item  `json:"item,omitempty"`
 }
 
 type ContactInfo struct {

@@ -1,5 +1,5 @@
-import React from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import React, { useEffect } from 'react';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { BrowsePage } from './pages/BrowsePage';
 import { ItemDetailPage } from './pages/ItemDetailPage';
 import { WishlistPage } from './pages/WishlistPage';
@@ -10,9 +10,33 @@ import { AuthPage } from './pages/AuthPage';
 import { AccountPage } from './pages/AccountPage';
 import { SellPage } from './pages/SellPage';
 
+declare global {
+  interface Window {
+    gtag?: (...args: any[]) => void;
+  }
+}
+
+// Track route changes in single-page applications
+const PageViewTracker: React.FC = () => {
+  const location = useLocation();
+
+  useEffect(() => {
+    if (typeof window.gtag === 'function') {
+      window.gtag('event', 'page_view', {
+        page_path: location.pathname + location.search,
+        page_location: window.location.href,
+        page_title: document.title,
+      });
+    }
+  }, [location]);
+
+  return null;
+};
+
 export const App: React.FC = () => {
   return (
     <BrowserRouter>
+      <PageViewTracker />
       <Routes>
         <Route path="/" element={<BrowsePage />} />
         <Route path="/items" element={<BrowsePage />} />

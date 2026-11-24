@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Header } from '../components/Header';
 import { Footer } from '../components/Footer';
 import { Toast } from '../components/Toast';
+import { SafeImage } from '../components/SafeImage';
 import { useCartStore } from '../store/cartStore';
 import { useToastStore } from '../store/toastStore';
 import { itemsService } from '../services/itemsService';
@@ -20,6 +21,7 @@ export const CheckoutPage: React.FC = () => {
   const [resolvedItems, setResolvedItems] = useState<{ item: Item; quantity: number }[]>([]);
   const [loading, setLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const isSubmittingRef = useRef(false);
 
   // Form State
   const [contact, setContact] = useState<ContactInfo>({
@@ -48,6 +50,9 @@ export const CheckoutPage: React.FC = () => {
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   useEffect(() => {
+    if (isSubmittingRef.current) {
+      return;
+    }
     if (cartItems.length === 0) {
       navigate('/cart');
       return;
@@ -106,6 +111,7 @@ export const CheckoutPage: React.FC = () => {
     }
 
     setIsSubmitting(true);
+    isSubmittingRef.current = true;
     try {
       const order = await ordersService.placeOrder(cartItems, contact, shipping);
       clearCart();
@@ -116,8 +122,9 @@ export const CheckoutPage: React.FC = () => {
         return;
       }
 
-      navigate(`/order/${order.id}`);
+      navigate(`/order/${order.id}`, { state: { order }, replace: true });
     } catch (err: unknown) {
+      isSubmittingRef.current = false;
       const msg = err instanceof Error ? err.message : 'Checkout failed';
       addToast(msg, 'error');
       setIsSubmitting(false);
@@ -415,7 +422,7 @@ export const CheckoutPage: React.FC = () => {
 
                   return (
                     <div key={item.id} className="flex items-start gap-2.5 text-xs hairline-b pb-2">
-                      <img
+                      <SafeImage
                         src={item.images[0]}
                         alt={item.title}
                         className="w-10 h-10 object-contain p-0.5 bg-background border border-hairline flex-shrink-0"

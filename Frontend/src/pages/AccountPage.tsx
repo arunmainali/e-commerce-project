@@ -4,6 +4,7 @@ import { Header } from '../components/Header';
 import { Footer } from '../components/Footer';
 import { Toast } from '../components/Toast';
 import { Countdown } from '../components/Countdown';
+import { SafeImage } from '../components/SafeImage';
 import { useAuthStore } from '../store/authStore';
 import { ordersService } from '../services/ordersService';
 import { itemsService } from '../services/itemsService';
@@ -300,7 +301,7 @@ export const AccountPage: React.FC = () => {
                     className="p-3 bg-surface/20 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3"
                   >
                     <div className="flex items-center gap-3">
-                      <img
+                      <SafeImage
                         src={(item.images && item.images[0]) || '/placeholder.svg'}
                         alt={item.title}
                         className="w-12 h-12 object-contain p-0.5 border border-hairline bg-surface flex-shrink-0"
@@ -402,7 +403,7 @@ export const AccountPage: React.FC = () => {
                 {safeListings.map((it) => (
                   <div key={it.id} className="p-3 flex items-center justify-between text-xs hover:bg-surface/30 gap-4">
                     <div className="flex items-center gap-3 min-w-0">
-                      <img
+                      <SafeImage
                         src={(it.images && it.images[0]) || '/placeholder.svg'}
                         alt={it.title}
                         className="w-10 h-10 object-contain p-0.5 border border-hairline bg-surface flex-shrink-0"
@@ -431,6 +432,24 @@ export const AccountPage: React.FC = () => {
                       <Link to={`/items/${it.id}`} className="btn-secondary text-xs py-0.5 px-2.5">
                         View Live Lot
                       </Link>
+                      {it.purchaseMode === 'auction' && it.status !== 'ended' && it.status !== 'sold' && (
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            if (!window.confirm(`Stop bidding on "${it.title}"? Highest bidder will win.`)) return;
+                            try {
+                              await itemsService.stopAuction(it.id);
+                              addToast(`Auction stopped for "${it.title}"`, 'success');
+                              itemsService.getMyListings().then(setMyListings);
+                            } catch (e: any) {
+                              addToast(e?.message || 'Failed to stop auction', 'error');
+                            }
+                          }}
+                          className="bg-accent text-white hover:bg-accent/90 text-xs py-0.5 px-2.5 font-semibold"
+                        >
+                          Stop Bidding
+                        </button>
+                      )}
                     </div>
                   </div>
                 ))}
